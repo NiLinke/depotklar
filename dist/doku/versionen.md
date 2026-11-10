@@ -1,6 +1,6 @@
 # Aktuelle Versionen und hinterlegte Regeln
 
-App 4.22.4 | Regelpaket DE-privat-2018-2026.15 | Datenformat 4
+App 4.22.5 | Regelpaket DE-privat-2018-2026.15 | Datenformat 4
 
 Dokumentationsstand 2026-11-10. Aus dem ausgelieferten Programm erzeugt; ein Build ist keine neue rechtliche Prüfung.
 

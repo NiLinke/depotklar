@@ -1,5 +1,21 @@
 # Änderungen und Dokumentationsstand
 
+## 2026-11-10 - Depotklar 4.22.5: Öffentliches Repository
+
+Anlass: Depotklar wird ab jetzt im öffentlichen Repository https://github.com/NiLinke/depotklar geführt; die öffentliche Instanz wird von dort bereitgestellt.
+
+Verhalten:
+- `BETRIEB.md`: Der Bau beginnt mit `git clone https://github.com/NiLinke/depotklar.git` statt mit einem Platzhalter.
+- `DOKPLOY.md`: Das Repository ist öffentlich; sonst bleibt die Einrichtung gleich (Repository `depotklar`, Zweig `main`).
+- README, Handbuch („Tresor, Sicherung und Datenschutz“) und Zielbild: Version 3 wird nicht mehr ausgeliefert und ist nicht Teil dieses Repositorys.
+- Kurse: Die automatische Aktualisierung der EZB- und Umsatzsteuer-Umrechnungskurse läuft wieder zweimal pro Woche im Repository, aus dem die öffentliche Instanz gebaut wird. Kopien und Forks ändern sich nicht von selbst.
+
+Auswirkung auf Bestände, Geld und Steuerwerte: Keine. Anwendung, Rechnung, Datenformat und Tresore sind unverändert.
+
+Grenzen: Ältere Versionen vor 4.22.2 sind nicht Teil dieses Repositorys.
+
+Tests: Keine neuen; alle bestehenden Prüfungen laufen unverändert.
+
 ## 2026-11-10 - Depotklar 4.22.4: Nutzungsrechte
 
 Anlass: Die freigegebenen Stände sind öffentlich einsehbar. Wer sie liest, soll sofort sehen, dass Depotklar kein freies Open-Source-Projekt ist.

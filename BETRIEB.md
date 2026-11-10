@@ -23,7 +23,7 @@ Gebaut wird eine Versionsmarke `vX.Y.Z`, nicht der Zweig `main`: `main` ändert 
 Auf einem Rechner mit Internetzugang:
 
 ```sh
-git clone <Repository> depotklar && cd depotklar
+git clone https://github.com/NiLinke/depotklar.git depotklar && cd depotklar
 git checkout vX.Y.Z
 docker build -t depotklar:X.Y.Z .
 ```

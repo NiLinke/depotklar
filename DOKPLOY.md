@@ -1,6 +1,6 @@
 # Depotklar auf depotklar.niklaslinke.de bereitstellen
 
-Repository: **https://github.com/NiLinke/depotklar**, privat, Branch **main**. Landingpage und Anwendung werden gemeinsam als eine Dokploy-Application bereitgestellt. Der Server liefert Programmdateien; Finanzdaten bleiben verschlüsselt im Browserprofil. Keine Finanzdatenbank, Upload-API oder Synchronisation.
+Repository: **https://github.com/NiLinke/depotklar**, öffentlich, Branch **main**. Landingpage und Anwendung werden gemeinsam als eine Dokploy-Application bereitgestellt. Der Server liefert Programmdateien; Finanzdaten bleiben verschlüsselt im Browserprofil. Keine Finanzdatenbank, Upload-API oder Synchronisation.
 
 ## 1. GitHub verbinden
 
@@ -78,7 +78,7 @@ Impressum und Datenschutzhinweise müssen zum tatsächlichen Betreiber und Hosti
 
 | Symptom | Prüfen |
 |---|---|
-| Repository fehlt | Dokploy-GitHub-App hat Zugriff auf das neue private Repository; Liste aktualisieren |
+| Repository fehlt | Dokploy-GitHub-App hat Zugriff auf das Repository; Liste aktualisieren |
 | COPY / Build-Kontext schlägt fehl | Repositorywurzel `/`, Kontext `.`, Dockerfile `Dockerfile` |
 | 502 / Bad Gateway | Container läuft, Domain-Port `3000`, Command Override leer |
 | 404 / andere Website | Richtige Application, Host korrekt, Pfad `/`, keine konkurrierende Domainzuordnung |

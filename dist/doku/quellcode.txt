@@ -1,4 +1,4 @@
-Depotklar 4.22.4 - ausgelieferter Quellcode. Versionsnachweis: https://depotklar.niklaslinke.de/doku/manifest.json
+Depotklar 4.22.5 - ausgelieferter Quellcode. Versionsnachweis: https://depotklar.niklaslinke.de/doku/manifest.json
 
 
 ===== DATEI dist/app.mjs =====
@@ -1325,7 +1325,7 @@ import {D,S,mul,div,round,sum} from './decimal.mjs';
 import {KINDS,GROUPS,RELATIONS,EXEMPTION,TREATY_RATE,SUBSTITUTE_RATE,groupOf,baseRateOf,LAST_RULE_YEAR,LAST_RATE_YEAR,FIRST_TAX_YEAR,isFund} from './rules.mjs';
 import {publishedVatRate} from './vatrates.mjs';
 
-export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.22.4';
+export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.22.5';
 
 export const EVENT_TYPES=Object.freeze({
  opening:'Bestand übernommen',

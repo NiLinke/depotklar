@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    # Nur im Entwicklungs-Repository; Kopien und freigegebene Stände ändern sich nicht von selbst (seit 4.22.2).
+    # Nur im Hauptrepository NiLinke/depotklar; Kopien und Forks ändern sich nicht von selbst.
     if: github.repository == 'NiLinke/depotklar'
     runs-on: ubuntu-latest
     steps:

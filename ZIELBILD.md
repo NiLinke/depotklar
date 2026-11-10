@@ -41,7 +41,7 @@ Bewusst nicht geführt:
 
 - **Geldkonten in EUR und ihre Salden.** Jeder Vorgang trägt seinen EUR-Betrag laut Abrechnung. Die Finanzbuchhaltung führt die Geldkonten. Für Währungskonten gibt es seit 4.21 nur den Abgleich mit dem Kontostand laut Bank.
 - **Bankimport mit Spaltenzuordnung, Belegdateien im Tresor, Buchungsvorlagen.** Bei wenigen Vorgängen im Jahr ist die Eingabe schneller als jede Zuordnung. Ein Belegverweis ist Freitext. Für viele Bewegungen auf Währungskonten gibt es seit 4.22 den Excel-Import mit fester Vorlage (keine Zuordnung, Vorschau, alles oder nichts, als Ganzes rücknehmbar).
-- **Tresore der Version 3.** Datenformat 4 ist nicht kompatibel. Version 3 bleibt über den Git-Tag `v3.4.0` wiederherstellbar.
+- **Tresore der Version 3.** Datenformat 4 ist nicht kompatibel. Version 3 wird nicht mehr ausgeliefert.
 
 Seit 4.22.1: Betrieb als Container im eigenen Netz, auch ohne Internetzugang (`BETRIEB.md`, `compose.yaml`, Betriebsart nur Anwendung), feste Lieferkette, Hinweis ohne sichere Verbindung.
 

@@ -1,21 +1,21 @@
 {
-  "app": "4.22.4",
+  "app": "4.22.5",
   "ruleset": "DE-privat-2018-2026.15",
   "schema": 4,
   "date": "2026-11-10",
-  "fingerprint": "39c386e3406c282ff3806cc9a87743aea22f59e5119637c0ca209b6683086eae",
+  "fingerprint": "9a64f64f0c3327648b3b89a912da6f3501d5d7c0884490a205569f064d8a1969",
   "inputHashes": {
     "public-docs/ANLEITUNG.md": "f655f9793e1e2a793624925c2fc1b268bcfe14eb37a2e79e55003a04eead428c",
     "public-docs/LOGIK.md": "b2f7bc84d4698518128ad1fc7eaeeaad6453c162634227088bc03b38450b23f1",
-    "public-docs/TRESOR.md": "ee79b87f2b18fc68f5996dc400594714000881ffc0c89f828a23de801afcf163",
+    "public-docs/TRESOR.md": "1c5e7956e0d11dc738139889276545123c90e5e4677da2acca7c2604aaf4677e",
     "public-docs/KI_START.md": "16c2d6da5ab39d34a0379f8e7c974005b25295df8a1d4998a51378ebf9753026",
-    "public-docs/AENDERUNGEN.md": "52b10ef7eba6f06e3c2bf33afd358ff7b5ca62f8697544181f4c848f4a784894",
+    "public-docs/AENDERUNGEN.md": "36a027f38f74aeabf6f72183f1cd42e3682c55c8ec77aa2d64fc6d720e67facd",
     "dist/app.mjs": "8ccadee0562ff9e69bde2291fd286f89c9ee69faf2020e68399f9b227af97765",
     "dist/core/decimal.mjs": "2623b02b3591615521da70ca0ad5c89be795245501551d04daa6294d05ded567",
     "dist/core/fx.mjs": "41bfc2a21f39ed214c40227ce2c346f8fe5e9959d75fbb4f397f573425dd3229",
     "dist/core/gifttax.mjs": "441b98716327cf90fb4011d1259cff1463e11229116a081471e5f401406f479f",
     "dist/core/ledger.mjs": "d7e8e7e7b07520bba7fe74d8d60c823747c1407eec6ca838c3080bee01a8213b",
-    "dist/core/model.mjs": "8055a530e8968f5dc241e4726fb71e2d85aaf6105242245a90227bf6a2700182",
+    "dist/core/model.mjs": "faa8152d026ab902fcb64be632c974d61ca826bba29d9d1d54f091f327eed7e2",
     "dist/core/rules.mjs": "bb1d5436387a0224efb8293a12f0b014e0f877167b0437591a5bff88950718c4",
     "dist/core/sale.mjs": "08ab3a0f2ff11c946586ad3c1cdba8c1f367d822ec3205a2e5f56e4f99165f2b",
     "dist/core/sample.mjs": "e937687d71e158583cc7b8adb7b023084151fcc8b29b9a9218b456a0778edc41",
@@ -47,7 +47,7 @@
     "dist/ui/xlsx.mjs": "c4e14803afb17672c99eba49c1195d0dc8c49cd92b6b997a5cd3ff902d5629a0",
     "scripts/docs.mjs": "917c64d3bc41523b39934b213cd67b554c4ef90f633cd5b714420eb68b413342",
     "server.mjs": "009a6bfa211bc3ac38c4cd108a4ad2831dc105f43ec053251e612e4080fdc2d8",
-    "package.json": "21bc6e83b8ede593384caf6b5e67bb8f8b3ef11ecb839e92a524691c5d751c9a"
+    "package.json": "1af48ab5b8a0fd60a525eae4857dc229571e6d6113cea8d1f63da7f20351bdfd"
   },
   "chapters": [
     {

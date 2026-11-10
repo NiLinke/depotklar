@@ -24,7 +24,7 @@ Druck, PDF- und Excel-Export sind unverschlüsselt. Wohin sie gespeichert werden
 
 ## Version 3
 
-Depotklar 4 verwendet ein neues Datenformat und einen eigenen Speicherbereich. Ein Tresor der Version 3 bleibt unverändert im Browser liegen, wird aber nicht gelesen. Version 3 ist über den Git-Tag `v3.4.0` wiederherstellbar.
+Depotklar 4 verwendet ein neues Datenformat und einen eigenen Speicherbereich. Ein Tresor der Version 3 bleibt unverändert im Browser liegen, wird aber nicht gelesen. Version 3 wird nicht mehr ausgeliefert.
 
 Tresore aus Depotklar 4.0 werden beim Öffnen um den leeren Bereich für Währungskonten ergänzt. Umgekehrt kann Depotklar 4.0 Daten mit Zinsen, Währungskonten, Schenkungen an mehrere oder einem Jahresabschluss nicht lesen. Seit 4.2 gilt der Jahresabschluss je Person (Bereich `closing`); ein gemeinsamer Abschluss aus 4.1 wird beim Öffnen für jede Person übernommen.
 
