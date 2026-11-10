@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {generate,CHAPTERS,markdown,safeLink} from '../scripts/docs.mjs';
-import {needsDocumentation,checkDocumentationChange} from '../scripts/docs-policy.mjs';
+import {needsDocumentation,checkDocumentationChange,diffBase} from '../scripts/docs-policy.mjs';
 import {APP_VERSION} from '../dist/core/model.mjs';
 
 test('published documentation matches the shipped code and lists only the chosen chapters',async()=>{
@@ -44,4 +44,15 @@ test('product changes in subfolders still require a changelog entry',()=>{
  assert.equal(needsDocumentation(['dist/doku/logik.html']),false);assert.equal(needsDocumentation(['README.md']),false);
  assert.throws(()=>checkDocumentationChange(['dist/app.mjs']),/AENDERUNGEN/);
  assert.doesNotThrow(()=>checkDocumentationChange(['dist/app.mjs','public-docs/AENDERUNGEN.md']));
+});
+
+test('the documentation check finds a comparison point even for the first entry of a repository',()=>{
+ const zeros='0'.repeat(40),empty=()=>'EMPTY',has=(...revs)=>rev=>revs.includes(rev);
+ assert.equal(diffBase({pull_request:{base:{sha:'b'}},before:'a'},{known:has('a','b','HEAD^'),emptyTree:empty}),'b');
+ assert.equal(diffBase({before:'a'},{known:has('a','HEAD^'),emptyTree:empty}),'a');
+ // Neuer Zweig oder überschriebener Zweig: der Vorgänger.
+ assert.equal(diffBase({before:zeros},{known:has('HEAD^'),emptyTree:empty}),'HEAD^');
+ assert.equal(diffBase({before:'weg'},{known:has('HEAD^'),emptyTree:empty}),'HEAD^');
+ // Erster Eintrag ohne Vorgänger: alles gilt als neu.
+ assert.equal(diffBase({before:zeros},{known:has(),emptyTree:empty}),'EMPTY');
 });

@@ -1,5 +1,18 @@
 # Änderungen und Dokumentationsstand
 
+## 2026-11-10 - Depotklar 4.22.3: Dokumentationsprüfung für den ersten Eintrag eines Repositorys
+
+Anlass: Der GitHub-Lauf brach im ersten Eintrag eines neuen Repositorys ab, weil die Dokumentationsprüfung den Stand mit seinem Vorgänger vergleicht und es keinen gab. Tests, Build und Container wurden dann gar nicht erst geprüft.
+
+Verhalten:
+- Die Prüfung vergleicht mit der Basis des Pull Requests oder dem Stand vor dem Push. Ist dieser Stand im Klon nicht vorhanden, etwa bei einem neuen oder überschriebenen Zweig, gilt der Vorgänger. Ohne Vorgänger gilt der leere Stand: Alle Dateien zählen als neu, ein Eintrag im Änderungsverlauf muss also dabei sein.
+
+Auswirkung auf Bestände, Geld und Steuerwerte: Keine. Anwendung, Rechnung, Datenformat und Tresore sind unverändert.
+
+Grenzen: Ist der Stand vor dem Push unbekannt, prüft der Lauf nur den letzten Eintrag gegen seinen Vorgänger.
+
+Tests: Feste Prüfungen für die Wahl des Vergleichsstands (Pull Request, Push, neuer Zweig, unbekannter Stand, erster Eintrag). Nachgestellt an echten Repositorys: Ein erster Eintrag mit Änderungsverlauf geht durch, einer ohne wird abgewiesen, ebenso ein Folgeeintrag ohne.
+
 ## 2026-11-10 - Depotklar 4.22.2: Freigegebene Stände ohne Vorgeschichte
 
 Anlass: Freigegebene Versionen sollen sich als in sich geschlossener Stand weitergeben lassen, ohne Bezug auf reale Bestände und ohne automatische Änderungen nach der Freigabe.

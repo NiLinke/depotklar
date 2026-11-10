@@ -2,7 +2,7 @@ import {D,S,mul,div,round,sum} from './decimal.mjs';
 import {KINDS,GROUPS,RELATIONS,EXEMPTION,TREATY_RATE,SUBSTITUTE_RATE,groupOf,baseRateOf,LAST_RULE_YEAR,LAST_RATE_YEAR,FIRST_TAX_YEAR,isFund} from './rules.mjs';
 import {publishedVatRate} from './vatrates.mjs';
 
-export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.22.2';
+export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.22.3';
 
 export const EVENT_TYPES=Object.freeze({
  opening:'Bestand übernommen',

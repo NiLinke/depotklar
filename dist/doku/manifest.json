@@ -1,21 +1,21 @@
 {
-  "app": "4.22.2",
+  "app": "4.22.3",
   "ruleset": "DE-privat-2018-2026.15",
   "schema": 4,
   "date": "2026-11-10",
-  "fingerprint": "e509b65d5a2b099c108642ef54cdd35639ae367213e3292d71efec6759d7efef",
+  "fingerprint": "7cd73742dd99b6c6a172cfe1e4416bfec634c3e0c78b57936830a1490f0da24b",
   "inputHashes": {
     "public-docs/ANLEITUNG.md": "f655f9793e1e2a793624925c2fc1b268bcfe14eb37a2e79e55003a04eead428c",
     "public-docs/LOGIK.md": "b2f7bc84d4698518128ad1fc7eaeeaad6453c162634227088bc03b38450b23f1",
     "public-docs/TRESOR.md": "ee79b87f2b18fc68f5996dc400594714000881ffc0c89f828a23de801afcf163",
     "public-docs/KI_START.md": "16c2d6da5ab39d34a0379f8e7c974005b25295df8a1d4998a51378ebf9753026",
-    "public-docs/AENDERUNGEN.md": "dab520c20e4a1938dc9257cc766213352bdb4fe9e506fd8981a56b608041742f",
+    "public-docs/AENDERUNGEN.md": "8c043efe6d57992b615c2788994e29be035c0149f7297689359e26e8dfefdfde",
     "dist/app.mjs": "8ccadee0562ff9e69bde2291fd286f89c9ee69faf2020e68399f9b227af97765",
     "dist/core/decimal.mjs": "2623b02b3591615521da70ca0ad5c89be795245501551d04daa6294d05ded567",
     "dist/core/fx.mjs": "41bfc2a21f39ed214c40227ce2c346f8fe5e9959d75fbb4f397f573425dd3229",
     "dist/core/gifttax.mjs": "441b98716327cf90fb4011d1259cff1463e11229116a081471e5f401406f479f",
     "dist/core/ledger.mjs": "d7e8e7e7b07520bba7fe74d8d60c823747c1407eec6ca838c3080bee01a8213b",
-    "dist/core/model.mjs": "69a12941e82f778b6657c8e9a1074baecf1094764fbe9f79c8c594f32894a9b3",
+    "dist/core/model.mjs": "db996e2b7982c1c49475ae9728507b923e8eda17f7fb29df1233a70ea2b1ed31",
     "dist/core/rules.mjs": "bb1d5436387a0224efb8293a12f0b014e0f877167b0437591a5bff88950718c4",
     "dist/core/sale.mjs": "08ab3a0f2ff11c946586ad3c1cdba8c1f367d822ec3205a2e5f56e4f99165f2b",
     "dist/core/sample.mjs": "e937687d71e158583cc7b8adb7b023084151fcc8b29b9a9218b456a0778edc41",
@@ -47,7 +47,7 @@
     "dist/ui/xlsx.mjs": "c4e14803afb17672c99eba49c1195d0dc8c49cd92b6b997a5cd3ff902d5629a0",
     "scripts/docs.mjs": "917c64d3bc41523b39934b213cd67b554c4ef90f633cd5b714420eb68b413342",
     "server.mjs": "009a6bfa211bc3ac38c4cd108a4ad2831dc105f43ec053251e612e4080fdc2d8",
-    "package.json": "01ec6b460c268edec3ce1e103f4b8fc63c0208e8b011dec8e6d0ceb1f6edf1f5"
+    "package.json": "b697698d34bdeee03554d2366ae3611d50cbb0c0ad27feec04049a8d0705bcc4"
   },
   "chapters": [
     {

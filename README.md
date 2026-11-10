@@ -2,7 +2,7 @@
 
 Wertpapierbestände einer Familie so führen, dass für jedes Depot und jedes Jahr zwei Blätter entstehen: die wirtschaftliche Betrachtung mit den Anschaffungswerten der Buchhaltung und die steuerliche Betrachtung mit der Basis, die ein Verkauf vom Erlös abzieht. Dazu die persönliche Jahresrechnung, die Werte für die eigene Steuererklärung (insbesondere den Freibetrag für bestandsgeschützte Alt-Anteile, den die Bank nicht anwendet) und die Schenkungsteuer mit Zehnjahreszusammenrechnung.
 
-Version 4.22.2. Zielbild und Abgrenzung: [ZIELBILD.md](ZIELBILD.md). Handbuch: https://depotklar.niklaslinke.de/doku/ · für KI-Assistenten: https://depotklar.niklaslinke.de/llms.txt. Pflegeregeln: [AGENTS.md](AGENTS.md). Betrieb im eigenen Netz, auch ohne Internetzugang: [BETRIEB.md](BETRIEB.md). Öffentliche Instanz: [DOKPLOY.md](DOKPLOY.md). Komponenten Dritter: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Version 4.22.3. Zielbild und Abgrenzung: [ZIELBILD.md](ZIELBILD.md). Handbuch: https://depotklar.niklaslinke.de/doku/ · für KI-Assistenten: https://depotklar.niklaslinke.de/llms.txt. Pflegeregeln: [AGENTS.md](AGENTS.md). Betrieb im eigenen Netz, auch ohne Internetzugang: [BETRIEB.md](BETRIEB.md). Öffentliche Instanz: [DOKPLOY.md](DOKPLOY.md). Komponenten Dritter: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **Modellrechnung, keine Steuererklärung.** Unvollständige oder nicht unterstützte Fälle liefern keinen Steuerbetrag, sondern „offen“ mit Grund.
 
