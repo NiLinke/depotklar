@@ -2,9 +2,13 @@
 
 Wertpapierbestände einer Familie so führen, dass für jedes Depot und jedes Jahr zwei Blätter entstehen: die wirtschaftliche Betrachtung mit den Anschaffungswerten der Buchhaltung und die steuerliche Betrachtung mit der Basis, die ein Verkauf vom Erlös abzieht. Dazu die persönliche Jahresrechnung, die Werte für die eigene Steuererklärung (insbesondere den Freibetrag für bestandsgeschützte Alt-Anteile, den die Bank nicht anwendet) und die Schenkungsteuer mit Zehnjahreszusammenrechnung.
 
-Version 4.22.3. Zielbild und Abgrenzung: [ZIELBILD.md](ZIELBILD.md). Handbuch: https://depotklar.niklaslinke.de/doku/ · für KI-Assistenten: https://depotklar.niklaslinke.de/llms.txt. Pflegeregeln: [AGENTS.md](AGENTS.md). Betrieb im eigenen Netz, auch ohne Internetzugang: [BETRIEB.md](BETRIEB.md). Öffentliche Instanz: [DOKPLOY.md](DOKPLOY.md). Komponenten Dritter: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Version 4.22.4. Zielbild und Abgrenzung: [ZIELBILD.md](ZIELBILD.md). Handbuch: https://depotklar.niklaslinke.de/doku/ · für KI-Assistenten: https://depotklar.niklaslinke.de/llms.txt. Pflegeregeln: [AGENTS.md](AGENTS.md). Betrieb im eigenen Netz, auch ohne Internetzugang: [BETRIEB.md](BETRIEB.md). Öffentliche Instanz: [DOKPLOY.md](DOKPLOY.md). Komponenten Dritter: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 **Modellrechnung, keine Steuererklärung.** Unvollständige oder nicht unterstützte Fälle liefern keinen Steuerbetrag, sondern „offen“ mit Grund.
+
+## Nutzungsrechte
+
+Alle Rechte vorbehalten. Der Quellcode ist zur Einsicht veröffentlicht. Einsatz, Weitergabe und Änderung sind nur mit schriftlicher Erlaubnis des Rechteinhabers gestattet; Kontakt über das Impressum der öffentlichen Instanz (https://depotklar.niklaslinke.de/impressum). Mitgelieferte Komponenten Dritter stehen unter ihren eigenen Lizenzen: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Starten
 
@@ -40,4 +44,4 @@ Kein Bundler, keine Laufzeitabhängigkeiten. Der Server liefert nur Dateien aus 
 
 ## Version 3
 
-Depotklar 4 ist ein Neuaufbau mit eigenem Datenformat. Tresore der Version 3 werden nicht gelesen und bleiben unverändert im Browser. Version 3 ist über den Git-Tag `v3.4.0` wiederherstellbar.
+Depotklar 4 ist ein Neuaufbau mit eigenem Datenformat. Tresore der Version 3 werden nicht gelesen und bleiben unverändert im Browser. Version 3 ist im Entwicklungs-Repository über den Git-Tag `v3.4.0` wiederherstellbar.

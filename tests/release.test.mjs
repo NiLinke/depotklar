@@ -12,6 +12,13 @@ test('Versionsangaben stimmen überein: Anwendung, package.json, Lockfile, READM
  assert.match(read('README.md'),new RegExp(`Version ${APP_VERSION.replaceAll('.','\.')}\.`));
 });
 
+test('Nutzungsrechte stehen in README und Betriebsanleitung; keine freie Lizenz',()=>{
+ const readme=read('README.md');
+ assert.match(readme,/^## Nutzungsrechte$/m);assert.match(readme,/Alle Rechte vorbehalten\./);assert.match(readme,/schriftlicher Erlaubnis des Rechteinhabers/);
+ assert.match(read('BETRIEB.md'),/alle Rechte vorbehalten/);
+ assert.throws(()=>read('LICENSE'),/ENOENT/,'eine Lizenzdatei wäre eine bewusste Entscheidung des Rechteinhabers');
+});
+
 test('Lieferkette fest: Grundimage mit Prüfsumme, GitHub-Aktionen auf Commits',()=>{
  const docker=read('Dockerfile');
  assert.match(docker,/^ARG NODE_IMAGE=node:\d+\.\d+\.\d+-alpine\d+\.\d+@sha256:[0-9a-f]{64}$/m);

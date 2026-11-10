@@ -1,5 +1,20 @@
 # Änderungen und Dokumentationsstand
 
+## 2026-11-10 - Depotklar 4.22.4: Nutzungsrechte
+
+Anlass: Die freigegebenen Stände sind öffentlich einsehbar. Wer sie liest, soll sofort sehen, dass Depotklar kein freies Open-Source-Projekt ist.
+
+Verhalten:
+- README, neuer Abschnitt „Nutzungsrechte“: Alle Rechte vorbehalten. Der Quellcode ist zur Einsicht veröffentlicht; Einsatz, Weitergabe und Änderung nur mit schriftlicher Erlaubnis des Rechteinhabers, Kontakt über das Impressum. Komponenten Dritter behalten ihre eigenen Lizenzen.
+- `BETRIEB.md`, Abschnitt „Lizenzen“: derselbe Hinweis für den Betrieb im eigenen Netz.
+- README: Version 3 liegt im Entwicklungs-Repository unter `v3.4.0`, nicht in den freigegebenen Ständen.
+
+Auswirkung auf Bestände, Geld und Steuerwerte: Keine. Anwendung, Rechnung, Datenformat und Tresore sind unverändert.
+
+Grenzen: Der Hinweis ist keine Lizenz. Eine Erlaubnis zur Nutzung erteilt der Rechteinhaber im Einzelfall.
+
+Tests: Feste Prüfung, dass README und Betriebsanleitung den Hinweis enthalten und keine Lizenzdatei ohne bewusste Entscheidung hinzukommt.
+
 ## 2026-11-10 - Depotklar 4.22.3: Dokumentationsprüfung für den ersten Eintrag eines Repositorys
 
 Anlass: Der GitHub-Lauf brach im ersten Eintrag eines neuen Repositorys ab, weil die Dokumentationsprüfung den Stand mit seinem Vorgänger vergleicht und es keinen gab. Tests, Build und Container wurden dann gar nicht erst geprüft.

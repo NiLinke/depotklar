@@ -94,4 +94,4 @@ Die EZB-Referenzkurse und die Umsatzsteuer-Umrechnungskurse sind im Image auf de
 
 ## Lizenzen
 
-Komponenten und Daten Dritter: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Depotklar selbst: alle Rechte vorbehalten; Einsatz nur mit schriftlicher Erlaubnis des Rechteinhabers (README, Abschnitt „Nutzungsrechte“). Komponenten und Daten Dritter: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
