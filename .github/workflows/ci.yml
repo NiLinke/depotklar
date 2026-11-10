@@ -1,0 +1,68 @@
+name: Depotklar checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/docs-policy.mjs
+      - run: npm run docs:check
+      - run: npm test
+      - run: npm run build
+      - name: Docker image including tests
+        run: docker build -t depotklar:ci .
+      - name: Start production container and check routes
+        run: |
+          docker run -d --name depotklar-ci -p 127.0.0.1:4183:3000 --read-only --cap-drop ALL --security-opt no-new-privileges depotklar:ci
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const base='http://127.0.0.1:4183';
+          let ready=false;
+          for(let attempt=0;attempt<20;attempt++){
+            try { if((await fetch(base+'/healthz')).ok){ready=true;break;} } catch {}
+            await new Promise(resolve=>setTimeout(resolve,1000));
+          }
+          assert.ok(ready,'Production container failed to start');
+          assert.match(await(await fetch(base+'/')).text(),/Vermögen ordnen/);
+          assert.match(await(await fetch(base+'/app/')).text(),/src="\/app.mjs"/);
+          assert.equal((await fetch(base+'/vendor/exceljs.min.js')).status,200);
+          assert.equal((await fetch(base+'/vendor/jspdf.umd.min.js')).status,200);
+          assert.equal((await fetch(base+'/vendor/jspdf.plugin.autotable.min.js')).status,200);
+          assert.equal((await fetch(base+'/datenschutz')).status,200);
+          assert.equal((await fetch(base+'/doku/')).status,200);
+          assert.equal((await fetch(base+'/llms-full.txt')).status,200);
+          JS
+      - name: App-only mode for operation in an own network
+        run: |
+          docker run -d --name depotklar-app -p 127.0.0.1:4184:3000 -e DEPOTKLAR_SITE=app --read-only --cap-drop ALL --security-opt no-new-privileges depotklar:ci
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const base='http://127.0.0.1:4184';
+          let ready=false;
+          for(let attempt=0;attempt<20;attempt++){
+            try { if((await fetch(base+'/healthz')).ok){ready=true;break;} } catch {}
+            await new Promise(resolve=>setTimeout(resolve,1000));
+          }
+          assert.ok(ready,'App-only container failed to start');
+          const home=await fetch(base+'/',{redirect:'manual'});
+          assert.equal(home.status,308);
+          assert.equal(home.headers.get('location'),'/app/');
+          assert.equal((await fetch(base+'/impressum')).status,404);
+          assert.equal((await fetch(base+'/app/')).status,200);
+          assert.equal((await fetch(base+'/doku/')).status,200);
+          JS
+      - name: Container logs
+        if: always()
+        run: docker logs depotklar-ci || true; docker logs depotklar-app || true
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f depotklar-ci depotklar-app || true

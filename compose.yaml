@@ -1,0 +1,22 @@
+# Depotklar im eigenen Netz. Der Container liefert nur Programmdateien aus und speichert nichts: Finanzdaten bleiben
+# verschlüsselt im Browser der Nutzer oder in deren Tresordateien. HTTPS übernimmt ein vorgeschalteter Reverse Proxy;
+# ohne HTTPS lassen sich keine Tresore anlegen oder öffnen. Anleitung: BETRIEB.md.
+services:
+  depotklar:
+    image: depotklar:${DEPOTKLAR_VERSION:-local}
+    build:
+      context: .
+    environment:
+      # Nur Anwendung und Handbuch, ohne Startseite, Impressum und Datenschutz des Projekts.
+      DEPOTKLAR_SITE: app
+    ports:
+      # Nur lokal erreichbar; der Reverse Proxy auf demselben Rechner leitet HTTPS hierher weiter.
+      - "127.0.0.1:3000:3000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    restart: unless-stopped

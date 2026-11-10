@@ -1,0 +1,9 @@
+node_modules
+.git
+.npm-cache
+.openai
+.sites-runtime
+.sites-checkout
+*.depotklar
+*.log
+dist/vendor

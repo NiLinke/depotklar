@@ -1,0 +1,96 @@
+{
+  "app": "4.22.2",
+  "ruleset": "DE-privat-2018-2026.15",
+  "schema": 4,
+  "date": "2026-11-10",
+  "fingerprint": "e509b65d5a2b099c108642ef54cdd35639ae367213e3292d71efec6759d7efef",
+  "inputHashes": {
+    "public-docs/ANLEITUNG.md": "f655f9793e1e2a793624925c2fc1b268bcfe14eb37a2e79e55003a04eead428c",
+    "public-docs/LOGIK.md": "b2f7bc84d4698518128ad1fc7eaeeaad6453c162634227088bc03b38450b23f1",
+    "public-docs/TRESOR.md": "ee79b87f2b18fc68f5996dc400594714000881ffc0c89f828a23de801afcf163",
+    "public-docs/KI_START.md": "16c2d6da5ab39d34a0379f8e7c974005b25295df8a1d4998a51378ebf9753026",
+    "public-docs/AENDERUNGEN.md": "dab520c20e4a1938dc9257cc766213352bdb4fe9e506fd8981a56b608041742f",
+    "dist/app.mjs": "8ccadee0562ff9e69bde2291fd286f89c9ee69faf2020e68399f9b227af97765",
+    "dist/core/decimal.mjs": "2623b02b3591615521da70ca0ad5c89be795245501551d04daa6294d05ded567",
+    "dist/core/fx.mjs": "41bfc2a21f39ed214c40227ce2c346f8fe5e9959d75fbb4f397f573425dd3229",
+    "dist/core/gifttax.mjs": "441b98716327cf90fb4011d1259cff1463e11229116a081471e5f401406f479f",
+    "dist/core/ledger.mjs": "d7e8e7e7b07520bba7fe74d8d60c823747c1407eec6ca838c3080bee01a8213b",
+    "dist/core/model.mjs": "69a12941e82f778b6657c8e9a1074baecf1094764fbe9f79c8c594f32894a9b3",
+    "dist/core/rules.mjs": "bb1d5436387a0224efb8293a12f0b014e0f877167b0437591a5bff88950718c4",
+    "dist/core/sale.mjs": "08ab3a0f2ff11c946586ad3c1cdba8c1f367d822ec3205a2e5f56e4f99165f2b",
+    "dist/core/sample.mjs": "e937687d71e158583cc7b8adb7b023084151fcc8b29b9a9218b456a0778edc41",
+    "dist/core/statement.mjs": "c5682e377da953e83f2ac3f4e58c1e6cad58528af445fda63bdbadb202cdb6f6",
+    "dist/core/undo.mjs": "fe30fa381d1b6b83de2b33251f5a6ad06e4d6899fd06a754dfd9ea87e8bf01ec",
+    "dist/core/vap.mjs": "ef3449b2d5ae7c3b705a98321b441a8ff70c95b68c04f632f464cd8abefa8a28",
+    "dist/core/vatrates.mjs": "557cf5390b43f301efc338922fb38635c3588685a4fe276c529d4669d7d7bfa0",
+    "dist/core/vault.mjs": "594e07567385528d8d76048c093a957fe6ee1bd80b114dcf62629f5b18fd61e6",
+    "dist/core/year.mjs": "c3f6d438a4f533e21de899b67cbb64f3c8218699da5e4d4c7e9e29b1c5700aea",
+    "dist/ui/accounts.mjs": "dd523b9961f78730134892f1a05d740a613ba202b451d221ffd881caba33455d",
+    "dist/ui/audit.mjs": "fbc2e447aa59d8440b84d5f85157d6551753ede596865a3b73e8487934f1d67a",
+    "dist/ui/closing.mjs": "e4a00fe4e8c97ecd792ec9f610c018e9403b25e0a2fa65c9798753d46096ad1d",
+    "dist/ui/entry.mjs": "5d71c46e9b4e336ed31cbe998e9b02346487bede75d22c12f63bb9f4e2678f14",
+    "dist/ui/filing.mjs": "f7b15509094c115e96de64c8e3939c4abb07c6880e15df31884a6c94e2a33862",
+    "dist/ui/format.mjs": "bc72346e3621439bdddd279c9ce35609689d7633b99fb8f193e2d0cb439d135d",
+    "dist/ui/fxrates.mjs": "860381b52df4d32835d10fd7c5106a012d5a7a89910e0b0ee5b33e14a8f92ba6",
+    "dist/ui/gifts.mjs": "3d7597f8ebbb26b1d88ce7fa46d29c8009d170c3e57e61aa77bbbd18b35dcd22",
+    "dist/ui/importer.mjs": "a48ab87eb5a5ee5ed88b0b40939a91c69181773bf77943e08dd25bb3c3eeca15",
+    "dist/ui/lots.mjs": "ef9b4334740424c7cf72a1e3d28fdd6cec895a8d81cd3994ea6f838fcdc17de6",
+    "dist/ui/master.mjs": "fe42c169531ff9b2d1328cded598a4ddf17af7cd33469e7263611bcec8839290",
+    "dist/ui/pdf.mjs": "4ae88ed3a14a14148e5e8e91a7621352973b1f7f972c7217a0208f5a90ab6235",
+    "dist/ui/prices.mjs": "393f67f28004f056106070372ddf2788da09cd947d410324989065c7e4382659",
+    "dist/ui/report.mjs": "2ca6d5910a3a8affe577112bd6743aa47496e7daedd36f47e4ff53bd4c620f0c",
+    "dist/ui/saver.mjs": "1681cd9eeda743eb49d9b06d72d635109f94f5898e3e45bd2871b275e2e1060f",
+    "dist/ui/sheet.mjs": "0b5b4ced0beabf36a13444cc9e6a98d2cf1e0e30cc167ac042eafe753775342b",
+    "dist/ui/taxpage.mjs": "3a07c14343fc0dcd6cf4a0c3649f57f974cd78e0be3530fc612b8b17cc58de8c",
+    "dist/ui/vaultui.mjs": "6f8c2eab7c33805d8a82dca6553019ba19b01ca9a22933d638bfb0b8bc8d3f2c",
+    "dist/ui/workings.mjs": "bf4522d4302dcf3cc84a428c56228eeb4286396d070288e8885acf95bd898c09",
+    "dist/ui/xlsx.mjs": "c4e14803afb17672c99eba49c1195d0dc8c49cd92b6b997a5cd3ff902d5629a0",
+    "scripts/docs.mjs": "917c64d3bc41523b39934b213cd67b554c4ef90f633cd5b714420eb68b413342",
+    "server.mjs": "009a6bfa211bc3ac38c4cd108a4ad2831dc105f43ec053251e612e4080fdc2d8",
+    "package.json": "01ec6b460c268edec3ce1e103f4b8fc63c0208e8b011dec8e6d0ceb1f6edf1f5"
+  },
+  "chapters": [
+    {
+      "id": "versionen",
+      "title": "Versionen und Jahresregeln",
+      "url": "https://depotklar.niklaslinke.de/doku/versionen.html",
+      "text": "https://depotklar.niklaslinke.de/doku/versionen.md"
+    },
+    {
+      "id": "anleitung",
+      "title": "Erste Schritte",
+      "url": "https://depotklar.niklaslinke.de/doku/anleitung.html",
+      "text": "https://depotklar.niklaslinke.de/doku/anleitung.md"
+    },
+    {
+      "id": "logik",
+      "title": "Rechenlogik und Grenzen",
+      "url": "https://depotklar.niklaslinke.de/doku/logik.html",
+      "text": "https://depotklar.niklaslinke.de/doku/logik.md"
+    },
+    {
+      "id": "tresor",
+      "title": "Tresor, Sicherung und Datenschutz",
+      "url": "https://depotklar.niklaslinke.de/doku/tresor.html",
+      "text": "https://depotklar.niklaslinke.de/doku/tresor.md"
+    },
+    {
+      "id": "ki-start",
+      "title": "Einstieg für andere KI-Assistenten",
+      "url": "https://depotklar.niklaslinke.de/doku/ki-start.html",
+      "text": "https://depotklar.niklaslinke.de/doku/ki-start.md"
+    },
+    {
+      "id": "aenderungen",
+      "title": "Änderungen",
+      "url": "https://depotklar.niklaslinke.de/doku/aenderungen.html",
+      "text": "https://depotklar.niklaslinke.de/doku/aenderungen.md"
+    },
+    {
+      "id": "quellen",
+      "title": "Implementierungsquellen",
+      "url": "https://depotklar.niklaslinke.de/doku/quellen.html",
+      "text": "https://depotklar.niklaslinke.de/doku/quellen.md"
+    }
+  ]
+}

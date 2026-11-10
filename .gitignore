@@ -1,0 +1,16 @@
+node_modules/
+.sites-runtime/
+.sites-checkout/
+*.log
+*.tar.gz
+.npm-cache/
+dist/vendor/
+*.depotklar
+*.xlsx
+*.pdf
+*.csv
+coverage/
+.openai/
+.env
+.env.*
+!.env.example

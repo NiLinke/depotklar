@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /app
+Sitemap: https://depotklar.niklaslinke.de/sitemap.xml

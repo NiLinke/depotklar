@@ -1,0 +1,1 @@
+const search=document.querySelector('#docs-search');search?.addEventListener('input',()=>{const q=search.value.toLocaleLowerCase('de').trim();for(const n of document.querySelectorAll('[data-search]'))n.hidden=!n.dataset.search.includes(q);});

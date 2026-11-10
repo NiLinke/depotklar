@@ -1,0 +1,42 @@
+name: Kurse aktualisieren
+# Holt zweimal pro Woche neue EZB-Tageskurse und bildet daraus vorläufige Umsatzsteuer-Umrechnungskurse. Vorhandene Werte
+# bleiben unverändert. Die amtlichen BMF-Kurse lassen sich hier nicht laden, das BMF sperrt Abrufe aus Rechenzentren;
+# sie kommen mit npm run rates:vat von einem normalen Rechner. Veröffentlicht wird nur nach bestandenen Tests und nur dist/rates.
+on:
+  schedule:
+    - cron: '23 5 * * 1,4'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kurse
+  cancel-in-progress: false
+jobs:
+  update:
+    # Nur im Entwicklungs-Repository; Kopien und freigegebene Stände ändern sich nicht von selbst (seit 4.22.2).
+    if: github.repository == 'NiLinke/depotklar'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: EZB-Tageskurse
+        run: npm run rates
+      - name: Vorlaeufige Umsatzsteuer-Umrechnungskurse
+        run: npm run rates:vat:ecb
+      - name: Pruefen und veroeffentlichen
+        run: |
+          if git diff --quiet -- dist/rates; then
+            echo "Keine neuen Kurse."
+            exit 0
+          fi
+          npm run docs:check
+          npm test
+          git config user.name "Depotklar Kurse"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/rates
+          git commit -m "Kurse aktualisiert"
+          git push

@@ -1,0 +1,27 @@
+{
+  "name": "depotklar",
+  "version": "4.22.2",
+  "private": true,
+  "type": "module",
+  "description": "Wertpapierbestände wirtschaftlich und steuerlich fortschreiben – lokal verschlüsselt",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "docs": "node scripts/docs.mjs",
+    "docs:check": "node scripts/docs.mjs --check",
+    "rates": "node scripts/fxrates.mjs",
+    "rates:vat": "node scripts/vatrates.mjs",
+    "rates:vat:ecb": "node scripts/vatrates.mjs --ecb"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "exceljs": "4.4.0",
+    "fake-indexeddb": "6.2.4",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.8"
+  }
+}
