@@ -28,7 +28,7 @@ git checkout vX.Y.Z
 docker build -t depotklar:X.Y.Z .
 ```
 
-Der Build verwendet ein fest angegebenes Grundimage mit Prüfsumme (`Dockerfile`, `NODE_IMAGE`) und die Bibliotheken genau nach `package-lock.json`. Er führt alle Tests aus und bricht bei einem Fehler ab. Das fertige Image enthält nur Node.js, `server.mjs` und `dist/`.
+Der Build verwendet ein fest angegebenes Grundimage mit Prüfsumme (`Dockerfile`, `NODE_IMAGE`) und die Bibliotheken genau nach `package-lock.json`. Er führt alle Tests aus und bricht bei einem Fehler ab. Das fertige Image enthält nur Node.js, `server.mjs` und `dist/` – ohne npm, yarn und corepack.
 
 ## Ohne Internetzugang übertragen
 
@@ -72,15 +72,17 @@ Zustandsprüfung: `GET /healthz` liefert `{"status":"ok","service":"depotklar"}`
 
 ## Sicherheitsmerkmale
 
-- Antworten mit strenger Content-Security-Policy (nur eigene Skripte und Stile, `connect-src 'none'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy` und `Cross-Origin-Resource-Policy: same-origin`, eingeschränkter `Permissions-Policy` und `Cache-Control: no-store`.
+- Antworten mit strenger Content-Security-Policy (nur eigene Skripte und Stile, `connect-src 'none'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy` und `Cross-Origin-Resource-Policy: same-origin`, eingeschränkter `Permissions-Policy`, `Strict-Transport-Security` (ein Jahr; über HTTPS merkt sich der Browser, die Adresse nur noch verschlüsselt aufzurufen) und `Cache-Control: no-store`.
 - Nur Dateien unterhalb von `dist/`; Pfade außerhalb werden abgewiesen, andere Methoden als `GET` und `HEAD` mit 405 beantwortet.
 - Keine Cookies, keine Analyse-, Schrift- oder Werbedienste, keine Telemetrie.
 - Tresore lassen sich ohne Passwort nicht lesen, auch nicht vom Betreiber. Ein vergessenes Passwort lässt sich nicht zurücksetzen.
+- Ein Stand aus einer Tresordatei ersetzt den Stand im Browser erst, nachdem er sich mit dem Passwort öffnen ließ. Wurde eine verbundene Datei anderswo geändert, überschreibt Depotklar sie nicht, sondern lässt den Anwender entscheiden.
+- Schwachstellen melden: [SECURITY.md](SECURITY.md).
 - Jeder GitHub-Lauf baut das Image, führt die Tests aus und startet den Container schreibgeschützt, ohne Linux-Rechte und ohne Rechteausweitung, in beiden Betriebsarten.
 
 ## Daten und Sicherung
 
-- Gesichert werden die **Tresordateien** der Nutzer, nicht der Container. Empfohlen: jeder Tresor mit einer Datei auf einem gesicherten Laufwerk verbunden („Tresor“ → „Mit Datei verbinden“); Depotklar schreibt sie nach jeder Änderung und erkennt, wenn die Datei anderswo neuer geworden ist.
+- Gesichert werden die **Tresordateien** der Nutzer, nicht der Container. Empfohlen: jeder Tresor mit einer Datei auf einem gesicherten Laufwerk verbunden („Tresor“ → „Mit Datei verbinden“); Depotklar schreibt sie nach jeder Änderung und erkennt, wenn die Datei anderswo geändert wurde; dann überschreibt es nichts von selbst. Arbeiten mehrere Personen mit derselben Datei, dann nacheinander, nicht gleichzeitig.
 - Browserdaten gehören zur Adresse (Protokoll, Host und Port). Wechselt die Adresse, sind die Tresore im Browser dort nicht sichtbar; über die Tresordatei oder eine Sicherungsdatei lassen sie sich unter der neuen Adresse öffnen.
 - Richtlinien, die Websitedaten beim Schließen des Browsers löschen, löschen auch Tresore im Browser. Die Depotklar-Adresse davon ausnehmen oder immer mit Tresordatei arbeiten.
 

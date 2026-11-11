@@ -138,12 +138,19 @@ export function statement(s,depotId,year,basis,{replayResult=null}={}){
  const sales=r.moves.filter(m=>m.type==='sell'&&m.depotId===depotId&&m.date>=start&&m.date<=end).map(m=>saleLine(s,m));
  const shows=m=>m.type!=='distribution'&&(basis==='tax'||(m.type!=='vap'&&m.type!=='transition'));
  const ids=[...new Set([...own.map(m=>m.securityId),...[...r.positions.keys()].filter(k=>k.startsWith(depotId+'|')).map(k=>k.split('|')[1])])];
+ // Lose zum Vorjahresende, nur bei Bedarf gerechnet (siehe Anfangswert).
+ let earlier=null;const lotsAtStart=()=>(earlier??=replay(s,{until:`${year-1}-12-31`})).positions;
+ const valuesOfLots=(lots,kind)=>lots.map(l=>({...l,cost:l.cost==null?null:D(l.cost),econ:l.econ==null?null:D(l.econ),basis:l.basis==null?null:D(l.basis),acc:l.acc==null?null:D(l.acc),vap:l.vap==null?null:D(l.vap)})).map(l=>basis==='economic'?economicValue(l):taxValue(l,kind));
  const rows=ids.map(securityId=>{
   const security=s.securities.find(x=>x.id===securityId),mine=own.filter(m=>m.securityId===securityId);
   const before=mine.filter(m=>m.date<start),during=mine.filter(m=>m.date>=start&&shows(m));
   // Ohne Stücke ist der Bestand null, auch wenn ein früherer Anschaffungswert unbekannt war.
-  const openingQuantity=S(sum(before.map(m=>D(m.quantity))));
-  const opening={quantity:openingQuantity,value:D(openingQuantity)===0n?'0':totalOf(before.filter(shows).map(m=>m[valueKey]))};
+  // Dieselbe Regel gilt für die Vorgeschichte: Eine aufgelöste und später neu aufgebaute Position beginnt bekannt.
+  // Bleibt die Summe der früheren Vorgänge offen, obwohl die Lose mit unbekanntem Wert schon abgegangen sind (FIFO),
+  // zählt der Wert der Lose zum Vorjahresende.
+  let oq=0n,ov='0';for(const m of before){oq+=D(m.quantity);if(shows(m))ov=add(ov,m[valueKey]);if(oq===0n)ov='0';}
+  if(ov==null&&oq>0n){const prior=lotsAtStart().get(`${depotId}|${securityId}`)||[],values=valuesOfLots(prior,security.kind);if(sum(prior.map(l=>D(l.quantity)))===oq&&values.every(x=>x!=null))ov=S(sum(values));}
+  const opening={quantity:S(oq),value:ov};
   let q=opening.quantity,v=opening.value;
   const lines=during.map(m=>{q=add(q,m.quantity);v=add(v,m[valueKey]);if(D(q)===0n)v='0';return {eventId:m.eventId,type:m.type,date:m.date,label:labelOf(s,m),note:[noteOf(m,basis)||tradeNote(s,m),averageNote(m,basis)].filter(Boolean).join(' · '),
    quantity:m.quantity,value:m[valueKey],proceeds:m.proceeds,gain:m.type==='sell'?m[gainKey]:m.type==='transfer'&&m.direction==='out'?m[gainKey]:null,balanceQuantity:q,balanceValue:v,year:m.year??null,from:basis==='tax'?fromLots(m):null};});
@@ -152,7 +159,10 @@ export function statement(s,depotId,year,basis,{replayResult=null}={}){
   const lots=r.positions.get(`${depotId}|${securityId}`)||[],internal=lots.map(l=>({...l,cost:l.cost==null?null:D(l.cost),econ:l.econ==null?null:D(l.econ),basis:l.basis==null?null:D(l.basis),acc:l.acc==null?null:D(l.acc),vap:l.vap==null?null:D(l.vap)}));
   const lotQuantity=S(sum(lots.map(l=>D(l.quantity)))),lotValues=internal.map(l=>basis==='economic'?economicValue(l):taxValue(l,security.kind));
   const lotValue=lotValues.some(x=>x==null)?null:S(sum(lotValues));
-  const balanced=D(lotQuantity)===D(closing.quantity)&&(lotValue==null&&closing.value==null||lotValue!=null&&closing.value!=null&&D(lotValue)===D(closing.value));
+  // Gegenprobe: Wo die Kette aus Anfangsbestand und Vorgängen einen Wert hat, muss sie den Losbestand treffen. Ist sie
+  // offen, die Lose am Jahresende aber vollständig bekannt (die unbekannten sind abgegangen), gilt deren Wert als Endstand.
+  const balanced=D(lotQuantity)===D(closing.quantity)&&(v==null||lotValue!=null&&D(lotValue)===D(v));
+  if(closing.value==null&&lotValue!=null&&D(lotQuantity)===D(closing.quantity))closing.value=lotValue;
   const price=yearEndPrice(s,securityId,year),market=price&&D(closing.quantity)>0n?S(round(mul(D(closing.quantity),D(price.price)))):null;
   const regimes=[...new Set(lots.map(l=>regimeOf(security.kind,l.group)))].map(k=>REGIMES[k]);
   // Lose zum Jahresende in FIFO-Reihenfolge (nur steuerlich; wirtschaftlich zählt der Durchschnitt): Erwerb, Herkunft, Stück (von ursprünglich) und Wert.

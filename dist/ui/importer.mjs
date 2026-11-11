@@ -1,5 +1,5 @@
 import {D,S,div} from '../core/decimal.mjs';
-import {FX_KINDS,accountHolder,isEventClosed,validateEvent,validDate,withEvents,uid} from '../core/model.mjs';
+import {FX_KINDS,accountHolder,isEventClosed,validateEvent,validDate,dateWarning,withEvents,uid} from '../core/model.mjs';
 import {fxReplay,eurValue} from '../core/fx.mjs';
 import {replay} from '../core/ledger.mjs';
 import {draftToEvent} from './entry.mjs';
@@ -57,8 +57,9 @@ function day(v){
  const x=cellValue(v);if(x==null||x==='')throw Error('Datum fehlt.');
  let iso=null;
  if(x instanceof Date)iso=Number.isNaN(x.getTime())?null:x.toISOString().slice(0,10);
- else if(typeof x==='number')iso=new Date(Date.UTC(1899,11,30)+Math.round(x)*864e5).toISOString().slice(0,10);
- else{const t=String(x).trim(),de=/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/.exec(t);
+ // Seriennummer mit Uhrzeit (Nachkommaanteil): Es zählt der Tag, nicht der nächste ab 12 Uhr.
+ else if(typeof x==='number')iso=new Date(Date.UTC(1899,11,30)+Math.floor(x)*864e5).toISOString().slice(0,10);
+ else{const t=String(x).trim(),de=/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})(?:[ T]+\d{1,2}:\d{2}(?::\d{2})?)?$/.exec(t);
   iso=de?`${de[3].length===2?'20'+de[3]:de[3]}-${de[2].padStart(2,'0')}-${de[1].padStart(2,'0')}`:/^\d{4}-\d{2}-\d{2}/.test(t)?t.slice(0,10):null;}
  if(!iso||!validDate(iso))throw Error(`Datum „${text(x)}“ ist ungültig.`);
  return iso;
@@ -152,15 +153,20 @@ const keyOf=e=>{const account=e.type==='fx'?e.accountId:e.fx?.accountId,amount=e
 
 // Vorschau und Ergebnis: je Zeile neu, schon erfasst oder Fehler; next ist der Stand nach der Übernahme (nur ohne Fehler).
 export function planImport(s,rows,{file=''}={}){
- const findAccount=accountFinder(s),known=new Set(s.events.map(keyOf).filter(Boolean)),lines=[];
+ // Schon erfasste Bewegungen je Schlüssel gezählt: Zwei echte gleiche Buchungen am selben Tag sind zwei Bewegungen –
+ // ist erst eine davon erfasst, gilt nur eine Zeile der Datei als „schon erfasst“, die zweite kommt neu hinzu.
+ const findAccount=accountFinder(s),known=new Map(),lines=[];
+ for(const k of s.events.map(keyOf).filter(Boolean))known.set(k,(known.get(k)||0)+1);
  for(const {row,raw} of rows){
-  const line={row,raw,status:'error',message:'',event:null};lines.push(line);
+  const line={row,raw,status:'error',message:'',warning:null,event:null};lines.push(line);
   try{
    const {event}=draftToEvent(s,toDraft(s,raw,findAccount));
    validateEvent(s,event,null,{fresh:true});
    if(isEventClosed(s,event))throw Error(`${event.date.slice(0,4)} ist abgeschlossen.`);
-   line.event=event;line.status=known.has(keyOf(event))?'duplicate':'new';
-   if(line.status==='duplicate')line.message='Schon erfasst, wird übersprungen.';
+   const k=keyOf(event),left=known.get(k)||0;
+   line.event=event;line.status=left>0?'duplicate':'new';
+   if(left>0){known.set(k,left-1);line.message='Schon erfasst, wird übersprungen.';}
+   else line.warning=dateWarning(event.date);
   }catch(err){line.message=err.message;}
  }
  const fresh=lines.filter(l=>l.status==='new').map(l=>l.event),count=k=>lines.filter(l=>l.status===k).length;
@@ -185,7 +191,8 @@ export function importPreviewHTML(plan){
  };
  const ordered=[...plan.lines.filter(l=>l.status==='error'),...plan.lines.filter(l=>l.status!=='error')],shown=ordered.slice(0,SHOWN);
  const badge={new:'<span class="tag add">neu</span>',duplicate:'<span class="tag">schon erfasst</span>',error:'<span class="tag del">Fehler</span>'};
- const rows=shown.map(l=>`<tr class="${l.status==='error'?'warn':''}"><td class="num">${l.row}</td>${cells(l)}<td>${badge[l.status]}${l.message?`<small>${esc(l.message)}</small>`:''}</td></tr>`).join('');
+ const rows=shown.map(l=>`<tr class="${l.status==='error'||l.warning?'warn':''}"><td class="num">${l.row}</td>${cells(l)}<td>${badge[l.status]}${l.message?`<small>${esc(l.message)}</small>`:''}${l.warning?`<small>${esc(l.warning)}</small>`:''}</td></tr>`).join('');
+ const odd=plan.lines.filter(l=>l.warning).length;
  // Bestand je Konto vorher und nachher, damit sich das Ergebnis mit dem Kontoauszug vergleichen lässt.
  let effect='';
  if(plan.next){
@@ -195,7 +202,8 @@ export function importPreviewHTML(plan){
  }
  const summary=`${c.new} ${c.new===1?'neue Bewegung':'neue Bewegungen'}${c.duplicate?`, ${c.duplicate} schon erfasst (werden übersprungen)`:''}${c.error?`, ${c.error} mit Fehler`:''}.`;
  const blocked=c.error?'<div class="notice"><strong>Noch nichts übernommen.</strong> Bitte die Zeilen mit Fehler in der Datei korrigieren und die Datei erneut einlesen. Übernommen wird erst, wenn keine Zeile einen Fehler hat.</div>':plan.problem?`<div class="notice"><strong>So lässt sich die Datei nicht übernehmen.</strong> ${esc(plan.problem)}</div>`:!c.new?'<p class="ok">Alle Zeilen sind schon erfasst. Es gibt nichts zu übernehmen.</p>':'';
- return `<div class="import"><p>${esc(plan.file)} · ${esc(summary)}</p>${blocked}${effect}
+ const dates=odd&&!c.error?`<div class="notice"><strong>${odd} ${odd===1?'Zeile hat':'Zeilen haben'} ein auffälliges Datum.</strong> Bitte vor der Übernahme prüfen – ein Tippfehler im Jahr lässt die Bewegung im gemeinten Jahr fehlen.</div>`:'';
+ return `<div class="import"><p>${esc(plan.file)} · ${esc(summary)}</p>${blocked}${dates}${effect}
   <div class="table-wrap"><table class="list compact"><thead><tr><th class="num">Zeile</th><th>Datum</th><th>Konto</th><th>Art</th><th class="num">Betrag</th><th class="num">EUR</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
   ${ordered.length>SHOWN?`<p class="hint">${ordered.length-SHOWN} weitere Zeilen ohne Fehler sind nicht einzeln gezeigt.</p>`:''}
   <p class="hint">Jede Bewegung steht danach einzeln im Kontoblatt und im Protokoll. Der ganze Import lässt sich im Protokoll mit „Rückgängig“ zurücknehmen.</p>

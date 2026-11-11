@@ -57,9 +57,14 @@ jobs:
           assert.equal(home.status,308);
           assert.equal(home.headers.get('location'),'/app/');
           assert.equal((await fetch(base+'/impressum')).status,404);
+          assert.equal((await fetch(base+'/impressum.html/')).status,404);
           assert.equal((await fetch(base+'/app/')).status,200);
           assert.equal((await fetch(base+'/doku/')).status,200);
+          assert.match((await fetch(base+'/app/')).headers.get('strict-transport-security')||'',/max-age=/);
           JS
+      - name: Runtime image without package managers
+        run: |
+          docker run --rm --entrypoint sh depotklar:ci -c 'if command -v npm || command -v npx || command -v yarn || command -v corepack; then echo "package manager present"; exit 1; fi; node --version; id -un'
       - name: Container logs
         if: always()
         run: docker logs depotklar-ci || true; docker logs depotklar-app || true

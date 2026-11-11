@@ -2,8 +2,9 @@
 // Sperren, Sicherung, Passwortwechsel und Tresorwechsel warten mit flush() auf alle offenen
 // Aufträge. Ein Fehler bleibt stehen, bis ein späterer Auftrag gelingt.
 //
-// checkFile: prüft vor dem Speichern, ob eine verbundene Datei anderswo neuer geworden ist
-// (dann wird nichts gespeichert). writeFile: schreibt danach in die Datei; scheitert das,
+// checkFile: läuft vor dem Speichern; wirft es, wird nichts gespeichert. Die Anwendung prüft dort,
+// ob eine verbundene Datei anderswo geändert wurde, und merkt dann einen Konflikt vor – gespeichert
+// wird in dem Fall nur im Browser. writeFile: schreibt danach in die Datei; scheitert das,
 // ist der Stand im Browser gesichert, die Datei aber nicht aktuell (fileError).
 export function createSaver({seal,save,getSession,setSession,getVault,checkFile=null,writeFile=null}){
  let chain=Promise.resolve(),pending=0,error=null,fileError=null;

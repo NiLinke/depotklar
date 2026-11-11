@@ -14,8 +14,18 @@ export {securityPages};
 const COLORS={economic:[31,79,143],tax:[148,86,15],plain:[16,24,40]};
 const FILLS={economic:[237,243,251],tax:[251,243,230],plain:[242,244,247]};
 const HEAD=['Vorgang','Datum','Stück','Wert','Erlös','Gewinn','Bestand Stück','Bestand Wert'];
-// Standardschrift Helvetica kennt nur WinAnsi: Zeichen außerhalb ersetzen.
-const plain=v=>String(v??'').replace(/[→⇒]/g,'->').replace(/[≤]/g,'<=').replace(/[≥]/g,'>=').replace(/[  ]/g,' ');
+// Standardschrift Helvetica kennt nur WinAnsi (Latin-1 und wenige Zeichen wie € – „ “): Schon ein einzelnes anderes Zeichen
+// entstellt in jsPDF den ganzen Text. Deshalb übliche Zeichen umschreiben, bei Buchstaben außerhalb von WinAnsi die Akzente
+// weglassen (ź → z, Č → C) und alles Übrige durch ein Fragezeichen ersetzen.
+const WINANSI_EXTRA='€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const TRANSLIT={'−':'-','‐':'-','‑':'-','‒':'-','―':'-','′':"'",'″':'"','≈':'~','≠':'!=','№':'Nr.','Ł':'L','ł':'l','Đ':'D','đ':'d','ı':'i','Ħ':'H','ħ':'h','Ŧ':'T','ŧ':'t','ĸ':'k','ŉ':"'n",'ẞ':'SS','∑':'Summe','✓':'ok','✔':'ok'};
+const winAnsi=text=>text.replace(/[^\u0000-\u00ff]/gu,c=>{
+ if(WINANSI_EXTRA.includes(c))return c;if(Object.hasOwn(TRANSLIT,c))return TRANSLIT[c];
+ const bare=c.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ return bare&&!/[^\u0000-\u00ff]/u.test(bare)?bare:'?';
+});
+const plain=v=>winAnsi(basicText(v));
+const basicText=v=>String(v??'').replace(/[→⇒]/g,'->').replace(/[≤]/g,'<=').replace(/[≥]/g,'>=').replace(/[  ]/g,' ');
 const span=(from,to)=>from===to?String(to):`${from}–${to}`;
 const toneOf=title=>/^Wirtschaftliche/.test(title||'')?'economic':/^Steuerliche/.test(title||'')?'tax':'plain';
 // Matrix der Lose im Querformat: höchstens so viele Jahresspalten, ältere Abgänge in einer Spalte (Excel zeigt jedes Jahr).

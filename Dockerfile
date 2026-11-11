@@ -19,6 +19,9 @@ RUN npm run build
 
 # Laufzeit: nur ausgelieferte Dateien und der Server, keine Bibliotheken, kein Root.
 FROM ${NODE_IMAGE}
+# npm, yarn und corepack braucht der Server nicht: Ohne sie hat das Image weniger Angriffsfläche und ein
+# Schwachstellen-Scanner meldet nicht die Abhängigkeiten der Paketverwaltung.
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 LABEL org.opencontainers.image.title="Depotklar" \
       org.opencontainers.image.description="Wertpapierbestände wirtschaftlich und steuerlich fortschreiben – lokal verschlüsselt"
 WORKDIR /app

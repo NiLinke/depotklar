@@ -238,13 +238,16 @@ function sheetHead(ws,title,lines){
 }
 
 // Blattnamen höchstens 31 Zeichen; liegt ein Wertpapier in mehreren Depots, folgt der Depotname.
+// Excel unterscheidet Blattnamen nicht nach Groß- und Kleinschreibung, erlaubt kein Hochkomma am Anfang oder Ende
+// und reserviert „History“ – sonst bricht die ganze Ausgabe ab.
 function sheetMaker(book){
- const used=new Set(),clean=t=>t.replace(/[\\/*?:[\]]/g,' ').trim();
+ const used=new Set(),clean=t=>t.replace(/[\\/*?:[\]]/g,' ').trim(),key=n=>n.toLowerCase();
+ const safe=n=>{n=n.replace(/^['\s]+|['\s]+$/g,'')||'Blatt';return key(n)==='history'?`${n}_`:n;};
  return (title,widths,suffix='',limit=28)=>{
-  let name=clean(title).slice(0,limit)||'Blatt';
-  if(used.has(name)&&suffix){const tail=clean(suffix).slice(0,18);name=`${clean(title).slice(0,Math.max(8,29-tail.length))}… ${tail}`.slice(0,31);}
-  while(used.has(name))name=name.slice(0,26)+'_'+used.size;
-  used.add(name);const ws=book.addWorksheet(name);ws.columns=widths.map(width=>({width}));return ws;
+  let name=safe(clean(title).slice(0,limit));
+  if(used.has(key(name))&&suffix){const tail=clean(suffix).slice(0,18);name=safe(`${clean(title).slice(0,Math.max(8,29-tail.length))}… ${tail}`.slice(0,31));}
+  for(let n=2,base=name;used.has(key(name));n++)name=safe(base.slice(0,26))+'_'+n;
+  used.add(key(name));const ws=book.addWorksheet(name);ws.columns=widths.map(width=>({width}));return ws;
  };
 }
 const WIDTHS=[46,12,12,16,16,16,14,18,36,14,14,14,14,16];

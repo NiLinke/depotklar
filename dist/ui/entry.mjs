@@ -1,12 +1,12 @@
-import {D,S,mul,sum,round,SCALE} from '../core/decimal.mjs';
+import {D,S,mul,div,sum,round,SCALE} from '../core/decimal.mjs';
 import {KINDS,GROUPS,REGIMES,regimeOf,groupOf,isFund,EXEMPTION,vapYears,vapInflow} from '../core/rules.mjs';
-import {EVENT_TYPES,TRANSFER_KINDS,ALLOCATIONS,FX_KINDS,ACCOUNT_KINDS,TAX_PARTS,roundingOnly,afterExemption,substituteBase,foreignShare,kindWarning,withEvent,withRecord,withBatch,isClosed,isEventClosed,eventPersons,accountHolder,withholdingOf,uid,today,lastSelectableYear} from '../core/model.mjs';
+import {EVENT_TYPES,TRANSFER_KINDS,ALLOCATIONS,FX_KINDS,ACCOUNT_KINDS,TAX_PARTS,roundingOnly,afterExemption,substituteBase,foreignShare,kindWarning,withEvent,withRecord,withBatch,isClosed,isEventClosed,eventPersons,accountHolder,withholdingOf,uid,today,lastSelectableYear,dateWarning} from '../core/model.mjs';
 import {saleLine} from '../core/statement.mjs';
 import {fxReplay,eurValue} from '../core/fx.mjs';
 import {replay} from '../core/ledger.mjs';
 import {giftAssessments} from '../core/gifttax.mjs';
 import {esc,money,euro,pieces,unit,date,field,select,check,decimalInput,inputValue} from './format.mjs';
-import {ecbRate,hasRates,ratesUntil} from './fxrates.mjs';
+import {ecbRate,referenceRate,hasRates,ratesUntil} from './fxrates.mjs';
 
 export const ENTRY_TYPES=[['buy','Kauf'],['sell','Verkauf'],['transfer','Schenkung / Übertrag'],['giftBatch','Schenkung an mehrere'],['distribution','Ausschüttung / Dividende'],['interest','Zinsen'],['otherIncome','Sonstiger Ertrag'],['merger','Fondsverschmelzung'],['exchange','Aktientausch'],['split','Split'],['vap','Vorabpauschale laut Bank'],['fx','Währungskonto'],['opening','Bestand übernehmen'],['transition','Übergang 2017/2018'],['accumulation','Thesaurierung (altes Recht)']];
 export const ENTRY_TITLES=Object.fromEntries(ENTRY_TYPES);
@@ -41,6 +41,10 @@ export function draftFromEvent(e,s=null){
  if(e.unitPrice!=null)d.amountMode='unit';
  if(e.fx){d.fxAccount=e.fx.accountId;d.fxAmount=inputValue(e.fx.amount);d.fxRate=e.fx.rateSource==='ecb'?'':inputValue(e.fx.rate);}
  // Ein übernommener EZB-Kurs ist keine Eingabe: beim Speichern gilt der Kurs zum dann gewählten Datum.
+ // Der bisherige Kurs bleibt im Entwurf: Ist die Kurstabelle beim Speichern nicht geladen (Verbindung weg),
+ // gilt er für dasselbe Datum und Konto weiter, statt verloren zu gehen.
+ if(e.rateSource==='ecb'&&e.rate!=null)d.ecbKept={on:e.kind==='opening'?e.acquired||null:e.date,accountId:e.accountId,rate:e.rate,rateDate:e.rateDate};
+ if(e.fx?.rateSource==='ecb'&&e.fx.rate!=null)d.ecbKept={on:e.date,accountId:e.fx.accountId,rate:e.fx.rate,rateDate:e.fx.rateDate};
  if(e.rateSource==='ecb')d.rate='';delete d.rateSource;delete d.rateDate;
  if(d.oldIncomeNone)d.oldIncome='';
  return d;
@@ -325,7 +329,10 @@ export function apply(s,d){
 // Ein gesperrter Vorgang zeigt seine Wirkung trotzdem; gespeichert wird nur bei offenem Jahr.
 const viewable=(s,events)=>events.some(e=>isEventClosed(s,e))?(({closing,...rest})=>rest)(s):s;
 
-export function previewHTML(s,d){
+// Hinweise zum Datum stehen über jeder Vorschau, auch der des Währungskontos und der Schenkung an mehrere.
+const dateNotes=d=>[dateWarning(d.date),dateWarning(d.acquired)].filter(Boolean).map(n=>`<div class="notice">${esc(n)}</div>`).join('');
+export function previewHTML(s,d){return dateNotes(d)+previewBody(s,d);}
+function previewBody(s,d){
  if(d.type==='giftBatch')return batchPreviewHTML(s,d);
  s=viewable(s,s.events.filter(e=>e.id===d.id));
  if(d.type==='fx')return fxPreviewHTML(s,d);
@@ -449,14 +456,33 @@ function linkedFxFields(s,d){
 }
 // Ohne Kurs laut Abrechnung gilt der EZB-Referenzkurs; er wird mit Quelle und Kurstag gespeichert.
 const ecbHint=a=>!a?'':hasRates(a.currency)?`Leer lassen, dann gilt der EZB-Referenzkurs des Tages (hinterlegt bis ${date(ratesUntil(a.currency))}).`:`Für ${esc(a.currency)} sind keine EZB-Kurse hinterlegt.`;
-function ecbFields(currency,on){const r=on?ecbRate(currency,on):null;return r?{rate:r.rate,rateSource:'ecb',rateDate:r.date}:{};}
+// kept: der bisher gespeicherte EZB-Kurs des Vorgangs; er gilt weiter, wenn für dasselbe Datum und Konto gerade kein
+// Kurs nachgeschlagen werden kann (Kurstabelle nicht geladen).
+function ecbFields(currency,on,kept=null,accountId=null){
+ const r=on?ecbRate(currency,on):null;if(r)return {rate:r.rate,rateSource:'ecb',rateDate:r.date};
+ return kept&&on&&kept.on===on&&kept.accountId===accountId?{rate:kept.rate,rateSource:'ecb',rateDate:kept.rateDate}:{};
+}
+// Tippfehler abfangen: Ein Devisenkurs, der um mehr als das Dreifache vom EZB-Referenzkurs des Tages abweicht, ist keiner –
+// meist steht ein Punkt statt des Dezimalkommas („1.085“ liest Depotklar als 1085) oder Betrag und EUR-Betrag passen nicht
+// zusammen. Nach dem Ende der hinterlegten Reihe dient ihr letzter Kurs als Vergleich. Ohne Referenzkurs (andere Währung,
+// Tabelle nicht geladen, Tag vor ihrem Beginn) keine Prüfung.
+function plausibleRate(currency,on,rate,implied=null){
+ const ref=on&&rate!=null?referenceRate(currency,on):null;if(!ref)return;
+ const r=D(rate),e=D(ref.rate);if(r<=0n||(r<=e*3n&&r*3n>=e))return;
+ const shown=v=>inputValue(S(round(D(v),4))),hint=`${ref.last?'letzten hinterlegten ':''}EZB-Referenzkurs vom ${date(ref.date)}: ${shown(ref.rate)} ${currency} je 1 EUR`;
+ throw Error(implied?`${implied} Das ergäbe einen Kurs von ${shown(rate)} ${currency} je 1 EUR (${hint}). Bitte die Beträge prüfen – Dezimalstellen mit Komma eingeben.`
+  :`Devisenkurs ${shown(rate)} passt nicht zum ${hint}. Bitte prüfen – Dezimalstellen mit Komma eingeben (1,085); „1.085“ liest Depotklar als 1085.`);
+}
 function linkFx(s,e,d){
  if(!d.fxAccount)return;
  const amount=decimalInput(d.fxAmount),rate=decimalInput(d.fxRate),a=(s.accounts||[]).find(x=>x.id===d.fxAccount);
  if(amount==null)throw Error('Betrag auf dem Währungskonto fehlt.');
  e.fx={accountId:d.fxAccount,amount};
- if(d.type==='distribution'||d.type==='interest'){if(rate!=null)e.fx.rate=rate;else if(a)Object.assign(e.fx,ecbFields(a.currency,e.date));}
+ if(a&&rate!=null)plausibleRate(a.currency,e.date,rate);
+ if(d.type==='distribution'||d.type==='interest'){if(rate!=null)e.fx.rate=rate;else if(a)Object.assign(e.fx,ecbFields(a.currency,e.date,d.ecbKept,a.id));}
  else if(rate!=null)e.fx.rate=rate;
+ // Kauf und Verkauf ohne Kurs: Der EUR-Betrag der Abrechnung gilt als Wert des Währungsbetrags – beide müssen zusammenpassen.
+ else if(a&&e.amount!=null&&D(e.amount)>0n&&D(amount)>0n)plausibleRate(a.currency,e.date,S(div(D(amount),D(e.amount))),`Der Betrag von ${inputValue(amount)} ${a.currency} passt nicht zum EUR-Betrag ${inputValue(e.amount)}.`);
 }
 
 function fxEvent(s,d){
@@ -471,7 +497,11 @@ function fxEvent(s,d){
  // Konten braucht keinen EUR-Wert.
  const eur=decimalInput(d.eur),rate=decimalInput(d.rate),target=(s.accounts||[]).find(x=>x.id===e.toAccountId);
  const needed=e.kind!=='inheritance'&&(e.kind!=='transfer'||a.kind==='interest'||target?.kind==='interest');
- if(eur!=null)e.eur=eur;else if(rate!=null)e.rate=rate;else if(needed)Object.assign(e,ecbFields(a.currency,e.kind==='opening'?e.acquired:e.date));
+ // Tag, an dem der EUR-Wert gilt: beim übernommenen Bestand der Anschaffungstag (ohne ihn keine Prüfung möglich).
+ const on=e.kind==='opening'?e.acquired||null:e.date;
+ if(eur!=null){if(D(eur)>0n&&D(amount)>0n)plausibleRate(a.currency,on,S(div(D(amount),D(eur))),`Der EUR-Betrag ${inputValue(eur)} passt nicht zu ${inputValue(amount)} ${a.currency}.`);e.eur=eur;}
+ else if(rate!=null){plausibleRate(a.currency,on,rate);e.rate=rate;}
+ else if(needed)Object.assign(e,ecbFields(a.currency,on,d.ecbKept,a.id));
  if(d.note?.trim())e.note=d.note.trim();
  return e;
 }
@@ -497,7 +527,7 @@ export function fxFormHTML(s,d,error=''){
  const rule=a&&kind==='exchange'?`<p class="hint wide">Ein Tausch: Die abgehende Währung gilt zum EUR-Wert des Tauschs als veräußert${a.kind==='payment'?' (steuerbar nur innerhalb eines Jahres nach der Anschaffung)':''}, das Zielkonto beginnt mit einem neuen Los zu diesem Wert und Tag. Leer gilt der EZB-Referenzkurs der abgehenden Währung.</p>`:a&&gratis?`<p class="hint wide">Das Zielkonto übernimmt Anschaffungstag und EUR-Wert der Beträge, die ältesten zuerst (§ 23 Abs. 1 S. 3 und § 20 Abs. 4 S. 6 EStG). Das ist keine Veräußerung.${kind==='gift'?' Der Wert am Tag der Schenkung zählt für die Schenkungsteuer; leer gilt der EZB-Referenzkurs des Tages.':''}</p>`:a?`<p class="hint wide">${esc(ACCOUNT_KINDS[a.kind])}. ${a.kind==='interest'?'Jeder Abgang ist eine Veräußerung; der Währungsgewinn ist Kapitalertrag.':`Steuerbar ist nur ein Abgang innerhalb eines Jahres nach der Anschaffung; verbraucht werden die ältesten Beträge zuerst.${kind==='transfer'?' Ein Übertrag auf ein verzinstes Konto gilt als Veräußerung und braucht den EUR-Wert.':''}`}</p>`:'';
  return `<form class="entry" data-form="entry" data-type="fx" ${d.id?`data-id="${esc(d.id)}"`:''}>${locked?lockedNotice(s,original):''}<p class="hint">${esc(HELP.fx)}</p>
   <fieldset class="grid" ${locked?'disabled':''}>${fields.join('')}${rule}</fieldset>
-  <div id="entry-preview" class="preview">${fxPreviewHTML(s,d)}</div>${error?`<p class="error">${esc(error)}</p>`:''}
+  <div id="entry-preview" class="preview">${previewHTML(s,d)}</div>${error?`<p class="error">${esc(error)}</p>`:''}
   ${formActions(locked,d.id?`<button type="button" class="button danger" data-action="delete-event" data-id="${esc(d.id)}">Löschen</button>`:'',d.id?'Änderung speichern':'Speichern')}</form>`;
 }
 
@@ -628,7 +658,7 @@ export function batchFormHTML(s,d,error=''){
  const table=`<div class="batch" data-rows><table class="rows"><thead><tr><th>#</th><th>An Depot</th><th class="num">${mode==='ratio'?'Anteil':'Stück'}</th><th></th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}${r.id?`<input type="hidden" name="row_id_${i}" value="${esc(r.id)}">`:''}</td><td><select name="row_toDepotId_${i}" aria-label="Zieldepot ${i+1}">${targets.map(([v,l])=>`<option value="${esc(v)}" ${v===(r.toDepotId||'')?'selected':''}>${esc(l)}</option>`).join('')}</select></td><td><input name="row_value_${i}" value="${esc(r.value||'')}" inputmode="decimal" aria-label="${mode==='ratio'?'Anteil':'Stück'} ${i+1}" placeholder="${mode==='ratio'?'z. B. 1':'Stück'}"></td><td class="row-tools"><button type="button" class="icon" data-action="batch-row-up" data-index="${i}" aria-label="Nach oben" ${i?'':'disabled'}>↑</button><button type="button" class="icon" data-action="batch-row-remove" data-index="${i}" aria-label="Zeile entfernen">×</button></td></tr>`).join('')}</tbody></table><button type="button" class="link" data-action="batch-row-add">+ Empfänger</button>${mode==='ratio'?'<small>Verhältnis frei wählbar: 1 : 1 : 2, Prozent oder Bruchteile. Depotklar rundet auf die Genauigkeit der Gesamtstückzahl, die Summe stimmt immer.</small>':''}</div>`;
  return `<form class="entry" data-form="entry" data-type="giftBatch">${locked?lockedNotice(s,members.find(e=>isEventClosed(s,e))):''}<p class="hint">${esc(HELP.giftBatch)}</p>
   <fieldset class="grid" ${locked?'disabled':''}>${fields.join('')}<p class="hint wide">${esc(allocationHint)}</p>${table}${field('note','Beleg / Notiz (optional)',d.note,'maxlength="200"')}</fieldset>
-  <div id="entry-preview" class="preview">${batchPreviewHTML(s,d)}</div>
+  <div id="entry-preview" class="preview">${previewHTML(s,d)}</div>
   ${error?`<p class="error">${esc(error)}</p>`:''}
   ${formActions(locked,d.existing?`<button type="button" class="button danger" data-action="delete-event" data-batch="${esc(d.batchId)}">Alle löschen</button>`:'',d.existing?'Änderung speichern':'Speichern')}</form>`;
 }

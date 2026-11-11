@@ -2,7 +2,7 @@ import {D,S,mul,div,round,sum} from './decimal.mjs';
 import {KINDS,GROUPS,RELATIONS,EXEMPTION,TREATY_RATE,SUBSTITUTE_RATE,groupOf,baseRateOf,LAST_RULE_YEAR,LAST_RATE_YEAR,FIRST_TAX_YEAR,isFund} from './rules.mjs';
 import {publishedVatRate} from './vatrates.mjs';
 
-export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.22.5';
+export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.23.0';
 
 export const EVENT_TYPES=Object.freeze({
  opening:'Bestand übernommen',
@@ -86,6 +86,16 @@ export function validDate(value){
  const d=new Date(value+'T12:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===value;
 }
 
+// Auffälliges Datum: kein Fehler – auch künftige Jahre lassen sich buchen –, aber ein Hinweis. Ein Tippfehler im Jahr
+// (2206 statt 2026) lässt den Vorgang sonst unbemerkt im gemeinten Jahr fehlen.
+export function dateWarning(date,now=today()){
+ if(!validDate(date))return null;
+ const year=Number(date.slice(0,4)),current=Number(now.slice(0,4)),shown=date.split('-').reverse().join('.');
+ if(year<1950)return `Datum ${shown}: Das Jahr ${year} liegt sehr weit zurück. Bitte prüfen.`;
+ if(year>current+5)return `Datum ${shown}: Das Jahr ${year} liegt mehr als fünf Jahre in der Zukunft. Bitte prüfen.`;
+ return null;
+}
+
 // Inhaber, Bank und Auslandskennzeichen eines Währungskontos: bei einem Depot die des Depots,
 // bei einem eigenständigen Konto die eigenen Angaben.
 export function accountHolder(s,a){
@@ -114,7 +124,10 @@ const decimal=(value,label,{optional=false,positive=false,signed=false}={})=>{
  if(positive&&n<=0n)fail(`${label} muss größer als null sein.`);
  if(!signed&&!positive&&n<0n)fail(`${label} darf nicht negativ sein.`);
 };
-const unique=(list,label)=>{const ids=new Set();for(const x of list){if(!x?.id||ids.has(x.id))fail(`${label}: fehlende oder doppelte Kennung.`);ids.add(x.id);}return ids;};
+// Kennungen vergibt Depotklar selbst (uid). Aus einer fremden Tresordatei könnte jeder Text kommen: Der senkrechte Strich
+// trennt Depot und Wertpapier in den Schlüsseln der Fortschreibung, und Namen wie __proto__ haben in Objekten eine eigene Bedeutung.
+const validId=id=>typeof id==='string'&&id.length<=100&&!/[|\u0000-\u001f]/.test(id)&&!['__proto__','constructor','prototype'].includes(id);
+const unique=(list,label)=>{const ids=new Set();for(const x of list){if(!x?.id||ids.has(x.id))fail(`${label}: fehlende oder doppelte Kennung.`);if(!validId(x.id))fail(`${label}: ungültige Kennung.`);ids.add(x.id);}return ids;};
 
 // Strukturprüfung. Fachliche Lücken (fehlender Kurs, fehlende Basis) sind
 // erlaubt und werden in der Rechnung als „nicht ermittelt“ ausgewiesen.
@@ -328,7 +341,7 @@ export function validateEvent(s,e,refs,{fresh=false}={}){
   if(e.kind!=='own'&&from===to)fail('Schenkung oder Erbschaft: Zieldepot gehört derselben Person.');
   decimal(e.price,'Übertrag: Kurs am Stichtag',{optional:true,positive:true});
   if(e.batchId!=null){
-   if(typeof e.batchId!=='string'||!e.batchId)fail('Schenkung an mehrere: Kennung fehlt.');
+   if(typeof e.batchId!=='string'||!e.batchId||!validId(e.batchId))fail('Schenkung an mehrere: Kennung fehlt.');
    if(e.kind==='own')fail('Schenkung an mehrere: nur Schenkung oder Erbschaft.');
    if(!Object.hasOwn(ALLOCATIONS,e.allocation))fail('Schenkung an mehrere: Aufteilung der Lose fehlt.');
    decimal(e.share,'Schenkung an mehrere: Anteil',{optional:true,positive:true});
@@ -470,10 +483,27 @@ export function withoutRecord(s,collection,id){
  if(collection==='accounts'&&next.events.some(e=>e.accountId===id||e.toAccountId===id||e.fx?.accountId===id))fail('Währungskonto hat noch Buchungen.');
  if(collection==='accounts'&&(next.balanceChecks||[]).some(c=>c.accountId===id))fail('Währungskonto hat noch Kontostände laut Bank.');
  if(collection==='securities'&&(next.events.some(e=>e.securityId===id||e.toSecurityId===id)||next.prices.some(p=>p.securityId===id)))fail('Wertpapier wird noch verwendet.');
+ // Was sich an anderer Stelle löschen lässt, nennt die Meldung; was nur zum gelöschten Eintrag gehört und sonst
+ // nirgends mehr erreichbar wäre (Bankbescheinigungen der Person, Buchhaltungsabgleiche des Depots), geht mit.
+ if(collection==='securities'&&(next.vapUnits||[]).some(u=>u.securityId===id))fail('Für das Wertpapier ist noch eine Vorabpauschale je Anteil eingetragen. Auf der Seite „Kurse“ zuerst leeren.');
+ if(collection==='persons'&&next.priorGifts.some(g=>g.donorId===id||g.recipientId===id))fail('Person hat noch Vorerwerbe. Auf der Seite „Schenkungen“ zuerst löschen.');
  const before=next[collection].find(x=>x.id===id);if(!before)fail('Eintrag nicht gefunden.');assertRecordOpen(s,collection,before,null);
  next[collection]=next[collection].filter(x=>x.id!==id);
- if(collection==='persons'){delete next.years[id];if(next.closing)delete next.closing[id];next.relations=next.relations.filter(r=>r.donorId!==id&&r.recipientId!==id);}
- next.audit.push({at:new Date().toISOString(),action:`${COLLECTIONS[collection]||collection} gelöscht`,collection,ref:id,before,after:null});
+ const at=new Date().toISOString(),drop=(list,belongs)=>{const gone=next[list].filter(belongs);next[list]=next[list].filter(x=>!belongs(x));for(const x of gone)next.audit.push({at,action:`${COLLECTIONS[list]} gelöscht`,collection:list,ref:x.id,before:x,after:null,reason:`Mit ${COLLECTIONS[collection]} ${before.name||''} gelöscht.`.replace(/ \./,'.')});};
+ if(collection==='persons'){delete next.years[id];if(next.closing)delete next.closing[id];next.relations=next.relations.filter(r=>r.donorId!==id&&r.recipientId!==id);drop('certificates',c=>c.personId===id);}
+ if(collection==='depots')drop('ledgerChecks',c=>c.depotId===id);
+ next.audit.push({at,action:`${COLLECTIONS[collection]||collection} gelöscht`,collection,ref:id,before,after:null});
+ validate(next);return next;
+}
+// Verwandtschaftsverhältnis zwischen Schenker und Empfänger: Es bestimmt den Freibetrag der Schenkungsteuer und steht
+// deshalb wie jede andere Änderung im Protokoll. Ohne Art wird es aufgehoben.
+export function withRelation(s,donorId,recipientId,kind){
+ if(donorId===recipientId)fail('Schenker und Empfänger müssen verschieden sein.');
+ const next=structuredClone(s),before=next.relations.find(r=>r.donorId===donorId&&r.recipientId===recipientId)||null;
+ if((before?.kind||null)===(kind||null))return s;
+ next.relations=next.relations.filter(r=>!(r.donorId===donorId&&r.recipientId===recipientId));
+ const after=kind?{donorId,recipientId,kind}:null;if(after)next.relations.push(after);
+ next.audit.push({at:new Date().toISOString(),action:after?(before?'Verwandtschaft geändert':'Verwandtschaft angelegt'):'Verwandtschaft gelöscht',ref:`relation:${donorId}:${recipientId}`,before,after});
  validate(next);return next;
 }
 export function withYear(s,personId,year,values){

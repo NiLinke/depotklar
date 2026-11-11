@@ -1,12 +1,12 @@
-Depotklar 4.22.5 - ausgelieferter Quellcode. Versionsnachweis: https://depotklar.niklaslinke.de/doku/manifest.json
+Depotklar 4.23.0 - ausgelieferter Quellcode. Versionsnachweis: https://depotklar.niklaslinke.de/doku/manifest.json
 
 
 ===== DATEI dist/app.mjs =====
-import {emptyState,validate,withEvent,withoutEvent,withoutBatch,withRecord,withoutRecord,withYear,withYearRules,withPrice,withVapUnit,withVatRate,withClosing,closingPartners,closedThrough,today,firstWorkday,uid,lastSelectableYear,lastBookedYear,APP_VERSION} from './core/model.mjs';
+import {emptyState,validate,withEvent,withoutEvent,withoutBatch,withRecord,withoutRecord,withRelation,withYear,withYearRules,withPrice,withVapUnit,withVatRate,withClosing,closingPartners,closedThrough,today,firstWorkday,uid,lastSelectableYear,lastBookedYear,APP_VERSION} from './core/model.mjs';
 import {replay} from './core/ledger.mjs';
 import {fxReplay} from './core/fx.mjs';
 import {demoState} from './core/sample.mjs';
-import {newSession,seal,open,rekey,load,save,checkPassword,listVaults,getMeta,setMeta,remove,parseEnvelope,fileConflict,fileAccess,filePermission,readFile as readVaultFile,writeFile as writeVaultFile} from './core/vault.mjs';
+import {newSession,seal,open,rekey,load,save,checkPassword,listVaults,getMeta,setMeta,remove,parseEnvelope,openBest,openWithSession,standOf,sameStand,fileChanged,fileRelation,fileAccess,filePermission,readFile as readVaultFile,writeFile as writeVaultFile} from './core/vault.mjs';
 import {createSaver} from './ui/saver.mjs';
 import {esc,decimalInput,inputValue,field} from './ui/format.mjs';
 import {sheetHTML} from './ui/sheet.mjs';
@@ -21,7 +21,7 @@ import {taxPageHTML} from './ui/taxpage.mjs';
 import {pricesHTML,yearEndOf,yearStartOf,PRICE_YEARS} from './ui/prices.mjs';
 import {giftsHTML} from './ui/gifts.mjs';
 import {masterHTML} from './ui/master.mjs';
-import {lockHTML,vaultPageHTML} from './ui/vaultui.mjs';
+import {lockHTML,vaultPageHTML,fileConflictHTML} from './ui/vaultui.mjs';
 import {workbook,accountsWorkbook} from './ui/xlsx.mjs';
 import {FIRST_TAX_YEAR} from './core/rules.mjs';
 import {D,S,div} from './core/decimal.mjs';
@@ -70,21 +70,41 @@ function commit(next,message=''){
  if(!demo)persist();
 }
 // Gespeichert wird je Änderung über einen eigenen Auftrag (ui/saver.mjs). Mit verbundener Datei
-// prüft Depotklar vorher, ob sie anderswo neuer geworden ist, und schreibt sie danach.
+// prüft Depotklar vorher, ob sie anderswo geändert wurde, und schreibt sie danach.
+const CONFLICT_SAVE='Die Datei hat einen anderen Stand als dieser Browser. Bis auf der Seite „Tresor“ entschieden ist, welcher Stand gilt, wird nur im Browser gespeichert.';
 const saver=createSaver({seal,save,getSession:()=>session,setSession:s=>{session=s;},getVault:()=>vaultId,
  checkFile:async(id,previous)=>{
-  if(!fileLink?.handle||!fileLink.granted)return;let current=null;try{current=await readVaultFile(fileLink.handle);}catch{return;}
-  if(fileConflict(current,previous))throw Error(`Die Datei ${fileLink.name||''} wurde anderswo geändert (Revision ${current.revision}). Tresor sperren und neu öffnen, dann gilt der neuere Stand der Datei.`);
+  // Im Konflikt wird die Datei nicht geschrieben; gespeichert wird dann nur im Browser.
+  if(!fileLink?.handle||!fileLink.granted||fileLink.conflict)return;let current=null;try{current=await readVaultFile(fileLink.handle);}catch{return;}
+  // Die Datei wurde anderswo geändert, während der Tresor offen ist: Die Änderung wird im Browser gespeichert, die Datei
+  // bleibt, wie sie ist, und der Anwender entscheidet, welcher Stand gilt – wie beim Öffnen (persist meldet es).
+  if(fileChanged(current,vaultMeta?.fileSeen||null,previous))fileLink={...fileLink,conflict:'both',fileRevision:current.revision,fresh:true};
  },
  writeFile:async(id,envelope)=>{
   if(!fileLink?.handle)return;
+  if(fileLink.conflict)throw Error(CONFLICT_SAVE);
   if(!fileLink.granted)throw Error('Der Browser hat den Zugriff auf die Datei noch nicht erlaubt – auf der Tresorseite erlauben.');
-  await writeVaultFile(fileLink.handle,envelope);
+  await writeVaultFile(fileLink.handle,envelope);await sawFile(id,envelope);
  }});
+// Kennung, mit der dieser Browser die verbundene Datei zuletzt gelesen oder geschrieben hat. Weicht die Datei später
+// davon ab, wurde sie anderswo geändert – dann überschreibt Depotklar nichts von selbst.
+async function sawFile(id,envelope){
+ const fileSeen=standOf(envelope);await setMeta(id,{fileSeen}).catch(()=>{});
+ if(id===vaultId&&vaultMeta)vaultMeta={...vaultMeta,fileSeen};
+}
+const conflictDialog=()=>modal('Datei und Browser haben verschiedene Stände',`${fileConflictHTML(fileLink,session?.revision)}<p class="hint">Dieselben Schaltflächen stehen auf der Seite „Tresor“ unter „Datei“.</p>`);
+const keptOf=(envelope,reason)=>({envelope,at:new Date().toISOString(),reason});
 function persist(){
  saver.persist(state).then(()=>{
   if(saver.error)toast(saver.error,'error');
   else{savedAt=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});setMeta(vaultId,{savedAt:new Date().toISOString()}).catch(()=>{});}
+  // Eben entdeckt, dass die Datei anderswo geändert wurde: Die Änderung liegt im Browser, jetzt entscheidet der Anwender.
+  // Ein offenes Formular bleibt stehen; dann genügt der Hinweis, die Entscheidung steht auf der Seite „Tresor“.
+  if(fileLink?.fresh&&!saver.error){
+   fileLink={...fileLink,fresh:false};
+   if(modalRoot.innerHTML)toast(`Die Datei ${fileLink.name||''} wurde anderswo geändert. Gespeichert wird jetzt nur im Browser – auf der Seite „Tresor“ entscheiden, welcher Stand gilt.`,'error');else conflictDialog();
+   if(route==='tresor')render();
+  }
   showSaveState();
  });
  showSaveState();
@@ -94,7 +114,7 @@ function saveStateText(){
  if(demo)return ['Demo · wird nicht gespeichert','demo'];
  if(saver.pending)return ['Speichert …','busy'];
  if(saver.error)return ['Nicht gespeichert','error'];
- if(saver.fileError)return ['Im Browser gespeichert · Datei nicht aktuell','warn'];
+ if(saver.fileError||fileLink?.conflict)return ['Im Browser gespeichert · Datei nicht aktuell','warn'];
  return [`Gespeichert${savedAt?' '+savedAt:''}${fileLink?.handle&&fileLink.granted?' · auch in der Datei':''}`,''];
 }
 function showSaveState(){const el=$('#save-state');if(!el)return;const [text,cls]=saveStateText();el.textContent=text;el.className=`save-state${cls?' '+cls:''}`;}
@@ -149,7 +169,8 @@ function page(){
  if(route==='schenkungen')return giftsHTML(state);
  if(route==='stammdaten')return masterHTML(state,{editing});
  if(route==='protokoll')return auditHTML(state,{filter:auditFilter,limit:auditLimit});
- if(route==='tresor')return vaultPageHTML({demo,vault:{name:vaultMeta?.name||'Tresor'},revision:session?.revision,savedAt,backupRevision:vaultMeta?.backupRevision??null,fileAccess:fileAccess(),file:fileLink,error:saver.error,fileError:saver.fileError});
+ if(route==='tresor')return vaultPageHTML({demo,vault:{name:vaultMeta?.name||'Tresor'},revision:session?.revision,savedAt,backupRevision:vaultMeta?.backupRevision??null,fileAccess:fileAccess(),file:fileLink,error:saver.error,fileError:saver.fileError,
+  kept:vaultMeta?.kept?.envelope?{revision:vaultMeta.kept.envelope.revision,reason:vaultMeta.kept.reason,when:new Date(vaultMeta.kept.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}:null});
  if(route==='konten')return accountsHTML(state,{year,from:fromYear,personId,open:openState});
  return sheetHTML(state,{year,from:fromYear,personId,view,securityId,depotId,lots:showLots});
 }
@@ -228,7 +249,7 @@ function startDemo(){state=demoState();demo=true;session=null;year=2026;fromYear
 // Sicherung, wenn sich seit der letzten heruntergeladenen Sicherung etwas geändert hat.
 async function lock({ask=false}={}){
  await saver.flush();
- const fileCurrent=fileLink?.handle&&fileLink.granted&&!saver.fileError;
+ const fileCurrent=fileLink?.handle&&fileLink.granted&&!fileLink.conflict&&!saver.fileError;
  if(ask&&state&&!demo&&session&&!fileCurrent&&session.revision>(vaultMeta?.backupRevision??0)){
   modal('Vor dem Sperren',`<p>Seit der letzten heruntergeladenen Sicherung hat sich der Tresor geändert${vaultMeta?.backupRevision?` (Sicherung: Revision ${vaultMeta.backupRevision}, jetzt ${session.revision})`:''}. Der Stand bleibt in diesem Browser gespeichert; eine Sicherungsdatei schützt zusätzlich, falls Browserdaten gelöscht werden.</p><div class="actions"><button class="button" data-action="lock-now">Ohne Sicherung sperren</button><button class="button primary" data-action="backup-lock">Sicherung herunterladen und sperren</button></div>`);
   return;
@@ -236,7 +257,7 @@ async function lock({ask=false}={}){
  if(ask&&saver.error&&!confirm(`Die letzte Änderung ist nicht gespeichert:\n${saver.error}\n\nTrotzdem sperren? Die Änderung geht dann verloren.`))return;
  // Ohne ausdrückliche Bestätigung geht nichts verloren: den ungespeicherten Stand verschlüsselt aufbewahren.
  if(!ask&&saver.error&&state&&session&&!demo){try{rescue={vaultId,envelope:await seal(state,session),error:saver.error};}catch{}}
- state=null;session=null;demo=false;lockError='';closeModal();clearTimeout(lockTimer);vaultId=null;vaultMeta=null;fileLink=null;lockMode='open';saver.reset();
+ state=null;session=null;pendingImport=null;demo=false;lockError='';closeModal();clearTimeout(lockTimer);vaultId=null;vaultMeta=null;fileLink=null;lockMode='open';saver.reset();
  try{vaults=await listVaults();}catch{}
  render();
 }
@@ -250,19 +271,26 @@ async function downloadBackup(){
  await setMeta(vaultId,{backupRevision:envelope.revision});vaultMeta=await getMeta(vaultId);
  if(route==='tresor')render();
 }
-// Tresordatei oder Sicherung als eigenen Tresor aufnehmen. Gleiches Salz heißt derselbe Tresor
-// (Kopie oder Datei eines anderen Geräts): dann den neueren Stand übernehmen statt doppelt anlegen.
+// Tresordatei oder Sicherung als eigenen Tresor aufnehmen. Gleiches Salz heißt derselbe Tresor (Kopie oder Datei eines
+// anderen Geräts). Ein neuerer Stand ersetzt den im Browser nicht ungeprüft: Er wird vorgemerkt und beim nächsten Öffnen
+// erst mit dem Passwort geöffnet. Lässt er sich nicht öffnen (beschädigt), bleibt der Stand im Browser.
 async function addVault(envelope,{handle=null,name='Tresor'}={}){
  const list=await listVaults(),same=list.find(v=>v.salt&&v.salt===envelope.salt),label=String(name).replace(/\.(depotklar|json)$/i,'')||'Tresor';
  let id;
  if(same){
-  id=same.id;const open=id===vaultId&&state,newer=envelope.revision>same.revision;
-  if(newer&&!open)await save(envelope,same.revision,id);
-  if(handle){await setMeta(id,{handle,fileName:handle.name});if(open){vaultMeta=await getMeta(id);fileLink={handle,name:handle.name,granted:await filePermission(handle).catch(()=>false)};}}
-  toast(newer&&open?'Die Datei ist neuer als der geöffnete Stand – Tresor sperren und neu öffnen.':newer?`„${same.name}“ auf den neueren Stand der Datei gebracht.`:`„${same.name}“ ist schon vorhanden${handle?' und jetzt mit der Datei verbunden':''}.`,newer&&open?'error':'info');
+  id=same.id;const open=id===vaultId&&state,newer=envelope.revision>same.revision,local=await load(id),equal=sameStand(envelope,local);
+  if(newer)await setMeta(id,{incoming:envelope});
+  if(handle){
+   // Abgeglichen ist die Datei nur, wenn sie genau den Stand dieses Browsers trägt; sonst klärt das nächste Öffnen, welcher gilt.
+   await setMeta(id,{handle,fileName:handle.name,fileSeen:equal?standOf(envelope):null});
+   if(open){vaultMeta=await getMeta(id);fileLink={handle,name:handle.name,granted:await filePermission(handle).catch(()=>false),conflict:!newer&&!equal?'both':null,fileRevision:envelope.revision};}
+  }
+  toast(newer&&open?'Die Datei ist neuer als der geöffnete Stand. Tresor sperren und neu öffnen: Depotklar prüft sie dann mit dem Passwort und übernimmt sie.'
+   :newer?`„${same.name}“: Die Datei ist neuer als der Stand in diesem Browser. Beim nächsten Öffnen prüft Depotklar sie mit dem Passwort und übernimmt sie dann.`
+   :`„${same.name}“ ist schon vorhanden${handle?' und jetzt mit der Datei verbunden':''}${envelope.revision<same.revision?` – hier mit neuerem Stand (Revision ${same.revision}, Datei ${envelope.revision}). Um zum älteren Stand der Datei zurückzukehren, den Tresor zuerst aus diesem Browser entfernen und die Datei dann erneut öffnen`:''}.`,newer&&open?'error':'info');
  }else{
   id=uid();await save(envelope,0,id);
-  await setMeta(id,{name:label,createdAt:new Date().toISOString(),backupRevision:envelope.revision,...(handle?{handle,fileName:handle.name}:{})});
+  await setMeta(id,{name:label,createdAt:new Date().toISOString(),backupRevision:envelope.revision,...(handle?{handle,fileName:handle.name,fileSeen:standOf(envelope)}:{})});
   toast(`Tresor „${label}“ hinzugefügt${state?' – zum Öffnen „Tresor wechseln“':''}.`);
  }
  vaults=await listVaults();
@@ -368,14 +396,49 @@ const actions={
   await saver.flush();const envelope=await load(vaultId);await writeVaultFile(handle,envelope);
   // Eine gescheiterte Speicherung gilt erst als erledigt, wenn der aktuelle Stand gespeichert ist.
   const unsaved=saver.error;
-  await setMeta(vaultId,{handle,fileName:handle.name});vaultMeta=await getMeta(vaultId);fileLink={handle,name:handle.name,granted:true};saver.reset();if(unsaved)persist();render();toast(`Mit ${handle.name} verbunden.`);
+  await setMeta(vaultId,{handle,fileName:handle.name,fileSeen:standOf(envelope)});vaultMeta=await getMeta(vaultId);fileLink={handle,name:handle.name,granted:true,conflict:null};saver.reset();if(unsaved)persist();render();toast(`Mit ${handle.name} verbunden.`);
  },
- 'unlink-file':async()=>{const unsaved=saver.error;await setMeta(vaultId,{handle:null,fileName:null});vaultMeta=await getMeta(vaultId);fileLink=null;saver.reset();if(unsaved)persist();render();toast('Verbindung gelöst. Die Datei bleibt erhalten.');},
+ 'unlink-file':async()=>{const unsaved=saver.error;await setMeta(vaultId,{handle:null,fileName:null,fileSeen:null});vaultMeta=await getMeta(vaultId);fileLink=null;saver.reset();if(unsaved)persist();closeModal();render();toast('Verbindung gelöst. Die Datei bleibt erhalten.');},
  'grant-file':async()=>{
   if(!fileLink?.handle)return;fileLink.granted=await filePermission(fileLink.handle,true).catch(()=>false);
-  if(fileLink.granted){await saver.flush();const current=await readVaultFile(fileLink.handle).catch(()=>null),local=await load(vaultId);
-   if(fileConflict(current,local.revision))toast('Die Datei ist neuer als dieser Browser – Tresor sperren und neu öffnen.','error');else{await writeVaultFile(fileLink.handle,local);saver.reset();toast('Datei verbunden und aktualisiert.');}}
+  if(fileLink.granted&&!fileLink.conflict){
+   await saver.flush();const current=await readVaultFile(fileLink.handle).catch(()=>null),local=await load(vaultId),relation=fileRelation({local,file:current,seen:vaultMeta?.fileSeen||null});
+   // Beide geändert: nichts überschreiben, der Anwender entscheidet. Nur die Datei geändert: nach dem Neuöffnen gilt sie.
+   if(relation==='both'){fileLink={...fileLink,conflict:'both',fileRevision:current.revision};conflictDialog();}
+   else if(relation==='fileAhead')toast('Die Datei wurde anderswo geändert – Tresor sperren und neu öffnen: Depotklar prüft dann, welcher Stand gilt.','error');
+   else{if(relation!=='same')await writeVaultFile(fileLink.handle,local);await sawFile(vaultId,local);saver.reset();toast(relation==='same'?'Zugriff erlaubt. Die Datei hat den Stand dieses Browsers.':'Datei verbunden und aktualisiert.');}
+  }
   render();
+ },
+ // Datei und Browser haben verschiedene Stände: ausdrücklich entscheiden, welcher gilt.
+ 'file-take':async()=>{
+  if(!fileLink?.handle||!fileLink.conflict)return;
+  const file=await readVaultFile(fileLink.handle).catch(()=>null);if(!file)return toast('Die Datei lässt sich nicht lesen.','error');
+  if(!confirm(`Den Stand der Datei ${fileLink.name||''} (Revision ${file.revision}) übernehmen?\n\nDie Änderungen dieses Browsers seit dem letzten Abgleich gelten dann nicht mehr. Der jetzige Stand wird aufbewahrt und lässt sich auf der Seite „Tresor“ wiederherstellen.`))return;
+  await saver.flush();const opened=await openWithSession(file,session),local=await load(vaultId);
+  await save(file,local?.revision||0,vaultId);
+  await setMeta(vaultId,{fileSeen:standOf(file),...(local?{kept:keptOf(local,'Stand dieses Browsers, bevor der Stand der verbundenen Datei übernommen wurde')}:{})});
+  state=opened.state;session=opened.session;vaultMeta=await getMeta(vaultId);fileLink={...fileLink,conflict:null};saver.reset();closeModal();render();toast('Stand der Datei übernommen. Der bisherige Stand ist aufbewahrt.');
+ },
+ 'file-overwrite':async()=>{
+  if(!fileLink?.handle||!fileLink.granted||!fileLink.conflict)return;
+  if(!confirm(`Die Datei ${fileLink.name||''} mit dem Stand dieses Browsers überschreiben?\n\nWas anderswo in die Datei gespeichert wurde, geht dabei verloren.`))return;
+  await saver.flush();const unsaved=saver.error,local=await load(vaultId);await writeVaultFile(fileLink.handle,local);await sawFile(vaultId,local);
+  fileLink={...fileLink,conflict:null};saver.reset();if(unsaved)persist();closeModal();render();toast('Datei überschrieben. Sie hat jetzt den Stand dieses Browsers.');
+ },
+ // Aufbewahrter Stand: herunterladen, verwerfen oder mit dem jetzigen tauschen.
+ 'kept-download':()=>{const k=vaultMeta?.kept;if(!k)return;download(`depotklar-${slug(vaultMeta?.name||'tresor').toLowerCase()}-aufbewahrt-revision-${k.envelope.revision}.depotklar`,new Blob([JSON.stringify(k.envelope)],{type:'application/json'}));},
+ 'kept-drop':async()=>{if(!vaultMeta?.kept||!confirm('Den aufbewahrten Stand endgültig verwerfen?'))return;await setMeta(vaultId,{kept:null});vaultMeta=await getMeta(vaultId);render();toast('Verworfen.');},
+ 'kept-restore':async()=>{
+  const k=vaultMeta?.kept;if(!k)return;
+  if(!confirm(`Den aufbewahrten Stand (Revision ${k.envelope.revision}) wiederherstellen?\n\nDer jetzige Stand wird dafür aufbewahrt – der Tausch lässt sich also zurücknehmen.`))return;
+  await saver.flush();if(saver.error)throw Error('Zuerst muss die letzte Änderung gespeichert sein.');
+  const opened=await openWithSession(k.envelope,session),local=await load(vaultId);
+  await save(k.envelope,local?.revision||0,vaultId);
+  await setMeta(vaultId,{kept:local?keptOf(local,'Stand vor dem Wiederherstellen des aufbewahrten Stands'):null});
+  // Eine verbundene Datei bekommt den wiederhergestellten Stand gleich mit, sofern kein Konflikt offen ist.
+  if(fileLink?.handle&&fileLink.granted&&!fileLink.conflict)await writeVaultFile(fileLink.handle,k.envelope).then(()=>sawFile(vaultId,k.envelope)).catch(err=>toast(`Datei nicht aktualisiert: ${err.message}`,'error'));
+  state=opened.state;session=opened.session;vaultMeta=await getMeta(vaultId);saver.reset();render();toast('Aufbewahrter Stand wiederhergestellt. Der vorherige Stand ist aufbewahrt.');
  },
  // Rettung bei einem Konflikt: den Stand im Arbeitsspeicher in eine neue Datei schreiben.
  'save-as-file':async()=>{
@@ -414,8 +477,9 @@ const forms={
  },
  balance:form=>{const f=new FormData(form),v=decimalInput(f.get('balance'));if(v==null)throw Error('Kontostand eintragen.');commit(withRecord(state,'balanceChecks',{id:form.dataset.id||undefined,accountId:form.dataset.account,date:`${year}-12-31`,balance:v,...(String(f.get('note')||'').trim()?{note:String(f.get('note')).trim()}:{})}),'Kontostand gespeichert.');closeModal();},
  ledger:form=>{const f=new FormData(form);commit(withRecord(state,'ledgerChecks',{id:form.dataset.id||undefined,depotId:form.dataset.depot,date:`${year}-12-31`,balance:decimalInput(f.get('balance')),note:String(f.get('note')||'')}),'Saldo gespeichert.');closeModal();},
- relation:form=>{const kind=new FormData(form).get('kind'),next=structuredClone(state);next.relations=next.relations.filter(r=>!(r.donorId===form.dataset.donor&&r.recipientId===form.dataset.recipient));if(kind)next.relations.push({donorId:form.dataset.donor,recipientId:form.dataset.recipient,kind});commit(next,'Verhältnis gespeichert.');},
- 'relation-new':form=>{const f=new FormData(form),d=f.get('donorId'),r=f.get('recipientId');if(d===r)throw Error('Schenker und Empfänger müssen verschieden sein.');const next=structuredClone(state);next.relations=next.relations.filter(x=>!(x.donorId===d&&x.recipientId===r));next.relations.push({donorId:d,recipientId:r,kind:f.get('kind')});commit(next,'Verhältnis angelegt.');},
+ // Verwandtschaft über withRelation: geprüft und mit Eintrag im Protokoll wie jede andere Änderung.
+ relation:form=>{const kind=new FormData(form).get('kind'),next=withRelation(state,form.dataset.donor,form.dataset.recipient,kind||null);if(next!==state)commit(next,kind?'Verhältnis gespeichert.':'Verhältnis aufgehoben.');},
+ 'relation-new':form=>{const f=new FormData(form),next=withRelation(state,f.get('donorId'),f.get('recipientId'),f.get('kind'));if(next!==state)commit(next,'Verhältnis angelegt.');else toast('Dieses Verhältnis besteht schon.');},
  'prior-gift':form=>{const f=new FormData(form),g={donorId:form.dataset.donor,recipientId:form.dataset.recipient,date:f.get('date'),value:decimalInput(f.get('value')),note:String(f.get('note')||'')};const t=decimalInput(f.get('taxPaid'));if(t!=null)g.taxPaid=t;commit(withRecord(state,'priorGifts',g),'Vorerwerb gespeichert.');},
  persons:form=>{const f=new FormData(form);commit(withRecord(state,'persons',{...(state.persons.find(p=>p.id===form.dataset.id)||{}),id:form.dataset.id||undefined,name:String(f.get('name')).trim()}),'Person gespeichert.');editing=null;render();},
  depots:form=>{const f=new FormData(form);commit(withRecord(state,'depots',{id:form.dataset.id||undefined,personId:f.get('personId'),name:String(f.get('name')).trim(),bank:String(f.get('bank')).trim(),account:String(f.get('account')||'').trim(),abroad:f.has('abroad')}),'Depot gespeichert.');editing=null;render();},
@@ -429,22 +493,37 @@ const forms={
  unlock:async form=>{
   busy=true;lockError='';render();
   try{
-   const id=form.dataset.vault||selectedVault,meta=await getMeta(id).catch(()=>null);
-   let envelope=await load(id),link=null,fromFile=false;
-   // Verbundene Datei: Zugriff erfragen (der Klick auf Öffnen erlaubt die Rückfrage) und den neueren Stand nehmen.
+   const id=form.dataset.vault||selectedVault,meta=await getMeta(id).catch(()=>null),local=await load(id);
+   let link=null,file=null;
+   // Verbundene Datei: Zugriff erfragen (der Klick auf Öffnen erlaubt die Rückfrage) und lesen.
    if(meta?.handle){
     const granted=await filePermission(meta.handle,true).catch(()=>false);link={handle:meta.handle,name:meta.fileName,granted};
-    if(granted){const file=await readVaultFile(meta.handle).catch(()=>null);if(file&&(!envelope||file.revision>envelope.revision)){envelope=file;fromFile=true;}}
+    if(granted)file=await readVaultFile(meta.handle).catch(()=>null);
    }
-   if(!envelope)throw Error('Für diesen Tresor ist nichts gespeichert.');
-   const password=new FormData(form).get('password'),opened=await open(envelope,password);
-   if(fromFile){const local=await load(id);await save(envelope,local?.revision||0,id);}
-   state=opened.state;session=opened.session;vaultId=id;selectedVault=id;vaultMeta=meta||{name:'Tresor'};fileLink=link;demo=false;savedAt=null;saver.reset();
+   const incoming=meta?.incoming||null;
+   if(!local&&!file&&!incoming)throw Error('Für diesen Tresor ist nichts gespeichert.');
+   // Welcher Stand gilt, entscheidet openBest: Ein Stand aus einer Datei erst, wenn er sich mit dem Passwort öffnen ließ.
+   const password=new FormData(form).get('password'),opened=await openBest({local,file,incoming,seen:meta?.fileSeen||null,password});
+   const fromFile=opened.source!=='local',patch={};
+   if(fromFile){
+    await save(opened.envelope,local?.revision||0,id);
+    // Trug der Browser eigene Änderungen, bleibt sein bisheriger Stand aufbewahrt (Seite „Tresor“).
+    if(opened.keepLocal)patch.kept=keptOf(local,opened.source==='incoming'?'Stand dieses Browsers, bevor die eingelesene Datei übernommen wurde':'Stand dieses Browsers, bevor der Stand der verbundenen Datei übernommen wurde');
+   }
+   if(incoming)patch.incoming=null;
+   if(file&&sameStand(file,opened.envelope))patch.fileSeen=standOf(file);
+   if(Object.keys(patch).length)await setMeta(id,patch);
+   state=opened.state;session=opened.session;vaultId=id;selectedVault=id;vaultMeta=(await getMeta(id).catch(()=>null))||meta||{name:'Tresor'};demo=false;savedAt=null;saver.reset();
+   fileLink=link?{...link,conflict:opened.conflict,fileRevision:file?.revision??null}:null;
    try{localStorage.setItem(VAULT_KEY,id);}catch{}
    go(location.hash.slice(1)&&ROUTES.some(r=>r[0]===location.hash.slice(1))?location.hash.slice(1):'jahr');touch();
-   if(rescue?.vaultId===id){try{rescueState=(await open(rescue.envelope,password)).state;
-    modal('Nicht gespeicherte Änderung',`<p>Beim Sperren war eine Änderung nicht gespeichert (${esc(rescue.error)}). Depotklar hat diesen Stand verschlüsselt aufbewahrt, solange der Browser offen ist.</p><p>„Übernehmen“ ersetzt den eben geöffneten Stand${fromFile?' aus der Datei':''}. Im Zweifel zuerst als eigene Datei sichern.</p><div class="actions"><button class="button" data-action="rescue-drop">Verwerfen</button><button class="button" data-action="rescue-file">Als Datei sichern</button><button class="button primary" data-action="rescue-take">Übernehmen</button></div>`);}catch{}}
-   if(fromFile)toast('Neuerer Stand aus der Datei übernommen.');
+   let dialog=false;
+   if(rescue?.vaultId===id){try{rescueState=(await open(rescue.envelope,password)).state;dialog=true;
+    modal('Nicht gespeicherte Änderung',`<p>Beim Sperren war eine Änderung nicht gespeichert (${esc(rescue.error)}). Depotklar hat diesen Stand verschlüsselt aufbewahrt, solange der Browser offen ist.</p><p>„Übernehmen“ ersetzt den eben geöffneten Stand${opened.source==='file'?' aus der Datei':''}. Im Zweifel zuerst als eigene Datei sichern.</p><div class="actions"><button class="button" data-action="rescue-drop">Verwerfen</button><button class="button" data-action="rescue-file">Als Datei sichern</button><button class="button primary" data-action="rescue-take">Übernehmen</button></div>`);}catch{}}
+   if(opened.conflict){if(!dialog)conflictDialog();}
+   else if(opened.failed.includes('incoming'))toast('Die eingelesene Datei ließ sich mit diesem Passwort nicht öffnen und wurde nicht übernommen. Geöffnet ist der Stand dieses Browsers.','error');
+   else if(opened.source==='file')toast(opened.keepLocal?'Stand der Datei übernommen. Der bisherige Stand dieses Browsers ist aufbewahrt (Seite „Tresor“).':'Neuerer Stand aus der Datei übernommen.');
+   else if(opened.source==='incoming')toast(opened.keepLocal?'Stand der eingelesenen Datei übernommen. Der bisherige Stand dieses Browsers ist aufbewahrt (Seite „Tresor“).':'Stand der eingelesenen Datei übernommen.');
    else if(link&&!link.granted)toast('Zugriff auf die Datei nicht erlaubt – auf der Tresorseite erlauben.','error');
   }
   catch(err){lockError=err.message;}finally{busy=false;if(!state)render();}
@@ -465,9 +544,11 @@ const forms={
  rekey:async form=>{
   const f=new FormData(form);if(f.get('next')!==f.get('repeat'))throw Error('Die neuen Passwörter stimmen nicht überein.');
   await saver.flush();if(saver.error)throw Error('Zuerst muss die letzte Änderung gespeichert sein.');
-  const current=await load(vaultId),changed=await rekey(current,f.get('current'),f.get('next'));
+  const current=await load(vaultId),linked=fileLink?.handle&&fileLink.granted&&!fileLink.conflict;
+  if(linked){const file=await readVaultFile(fileLink.handle).catch(()=>null);if(fileChanged(file,vaultMeta?.fileSeen||null,current.revision))throw Error('Die verbundene Datei wurde anderswo geändert. Zuerst den Tresor sperren und neu öffnen, dann das Passwort ändern.');}
+  const changed=await rekey(current,f.get('current'),f.get('next'));
   await save(changed.envelope,current.revision,vaultId);session=changed.session;
-  if(fileLink?.handle&&fileLink.granted)await writeVaultFile(fileLink.handle,changed.envelope).catch(err=>toast(`Datei nicht aktualisiert: ${err.message}`,'error'));
+  if(linked)await writeVaultFile(fileLink.handle,changed.envelope).then(()=>sawFile(vaultId,changed.envelope)).catch(err=>toast(`Datei nicht aktualisiert: ${err.message}`,'error'));
   toast('Passwort geändert. Ältere Sicherungsdateien behalten das bisherige Passwort.');form.reset();
  },
  'vault-name':async form=>{
@@ -1325,7 +1406,7 @@ import {D,S,mul,div,round,sum} from './decimal.mjs';
 import {KINDS,GROUPS,RELATIONS,EXEMPTION,TREATY_RATE,SUBSTITUTE_RATE,groupOf,baseRateOf,LAST_RULE_YEAR,LAST_RATE_YEAR,FIRST_TAX_YEAR,isFund} from './rules.mjs';
 import {publishedVatRate} from './vatrates.mjs';
 
-export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.22.5';
+export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.23.0';
 
 export const EVENT_TYPES=Object.freeze({
  opening:'Bestand übernommen',
@@ -1409,6 +1490,16 @@ export function validDate(value){
  const d=new Date(value+'T12:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===value;
 }
 
+// Auffälliges Datum: kein Fehler – auch künftige Jahre lassen sich buchen –, aber ein Hinweis. Ein Tippfehler im Jahr
+// (2206 statt 2026) lässt den Vorgang sonst unbemerkt im gemeinten Jahr fehlen.
+export function dateWarning(date,now=today()){
+ if(!validDate(date))return null;
+ const year=Number(date.slice(0,4)),current=Number(now.slice(0,4)),shown=date.split('-').reverse().join('.');
+ if(year<1950)return `Datum ${shown}: Das Jahr ${year} liegt sehr weit zurück. Bitte prüfen.`;
+ if(year>current+5)return `Datum ${shown}: Das Jahr ${year} liegt mehr als fünf Jahre in der Zukunft. Bitte prüfen.`;
+ return null;
+}
+
 // Inhaber, Bank und Auslandskennzeichen eines Währungskontos: bei einem Depot die des Depots,
 // bei einem eigenständigen Konto die eigenen Angaben.
 export function accountHolder(s,a){
@@ -1437,7 +1528,10 @@ const decimal=(value,label,{optional=false,positive=false,signed=false}={})=>{
  if(positive&&n<=0n)fail(`${label} muss größer als null sein.`);
  if(!signed&&!positive&&n<0n)fail(`${label} darf nicht negativ sein.`);
 };
-const unique=(list,label)=>{const ids=new Set();for(const x of list){if(!x?.id||ids.has(x.id))fail(`${label}: fehlende oder doppelte Kennung.`);ids.add(x.id);}return ids;};
+// Kennungen vergibt Depotklar selbst (uid). Aus einer fremden Tresordatei könnte jeder Text kommen: Der senkrechte Strich
+// trennt Depot und Wertpapier in den Schlüsseln der Fortschreibung, und Namen wie __proto__ haben in Objekten eine eigene Bedeutung.
+const validId=id=>typeof id==='string'&&id.length<=100&&!/[|\u0000-\u001f]/.test(id)&&!['__proto__','constructor','prototype'].includes(id);
+const unique=(list,label)=>{const ids=new Set();for(const x of list){if(!x?.id||ids.has(x.id))fail(`${label}: fehlende oder doppelte Kennung.`);if(!validId(x.id))fail(`${label}: ungültige Kennung.`);ids.add(x.id);}return ids;};
 
 // Strukturprüfung. Fachliche Lücken (fehlender Kurs, fehlende Basis) sind
 // erlaubt und werden in der Rechnung als „nicht ermittelt“ ausgewiesen.
@@ -1651,7 +1745,7 @@ export function validateEvent(s,e,refs,{fresh=false}={}){
   if(e.kind!=='own'&&from===to)fail('Schenkung oder Erbschaft: Zieldepot gehört derselben Person.');
   decimal(e.price,'Übertrag: Kurs am Stichtag',{optional:true,positive:true});
   if(e.batchId!=null){
-   if(typeof e.batchId!=='string'||!e.batchId)fail('Schenkung an mehrere: Kennung fehlt.');
+   if(typeof e.batchId!=='string'||!e.batchId||!validId(e.batchId))fail('Schenkung an mehrere: Kennung fehlt.');
    if(e.kind==='own')fail('Schenkung an mehrere: nur Schenkung oder Erbschaft.');
    if(!Object.hasOwn(ALLOCATIONS,e.allocation))fail('Schenkung an mehrere: Aufteilung der Lose fehlt.');
    decimal(e.share,'Schenkung an mehrere: Anteil',{optional:true,positive:true});
@@ -1793,10 +1887,27 @@ export function withoutRecord(s,collection,id){
  if(collection==='accounts'&&next.events.some(e=>e.accountId===id||e.toAccountId===id||e.fx?.accountId===id))fail('Währungskonto hat noch Buchungen.');
  if(collection==='accounts'&&(next.balanceChecks||[]).some(c=>c.accountId===id))fail('Währungskonto hat noch Kontostände laut Bank.');
  if(collection==='securities'&&(next.events.some(e=>e.securityId===id||e.toSecurityId===id)||next.prices.some(p=>p.securityId===id)))fail('Wertpapier wird noch verwendet.');
+ // Was sich an anderer Stelle löschen lässt, nennt die Meldung; was nur zum gelöschten Eintrag gehört und sonst
+ // nirgends mehr erreichbar wäre (Bankbescheinigungen der Person, Buchhaltungsabgleiche des Depots), geht mit.
+ if(collection==='securities'&&(next.vapUnits||[]).some(u=>u.securityId===id))fail('Für das Wertpapier ist noch eine Vorabpauschale je Anteil eingetragen. Auf der Seite „Kurse“ zuerst leeren.');
+ if(collection==='persons'&&next.priorGifts.some(g=>g.donorId===id||g.recipientId===id))fail('Person hat noch Vorerwerbe. Auf der Seite „Schenkungen“ zuerst löschen.');
  const before=next[collection].find(x=>x.id===id);if(!before)fail('Eintrag nicht gefunden.');assertRecordOpen(s,collection,before,null);
  next[collection]=next[collection].filter(x=>x.id!==id);
- if(collection==='persons'){delete next.years[id];if(next.closing)delete next.closing[id];next.relations=next.relations.filter(r=>r.donorId!==id&&r.recipientId!==id);}
- next.audit.push({at:new Date().toISOString(),action:`${COLLECTIONS[collection]||collection} gelöscht`,collection,ref:id,before,after:null});
+ const at=new Date().toISOString(),drop=(list,belongs)=>{const gone=next[list].filter(belongs);next[list]=next[list].filter(x=>!belongs(x));for(const x of gone)next.audit.push({at,action:`${COLLECTIONS[list]} gelöscht`,collection:list,ref:x.id,before:x,after:null,reason:`Mit ${COLLECTIONS[collection]} ${before.name||''} gelöscht.`.replace(/ \./,'.')});};
+ if(collection==='persons'){delete next.years[id];if(next.closing)delete next.closing[id];next.relations=next.relations.filter(r=>r.donorId!==id&&r.recipientId!==id);drop('certificates',c=>c.personId===id);}
+ if(collection==='depots')drop('ledgerChecks',c=>c.depotId===id);
+ next.audit.push({at,action:`${COLLECTIONS[collection]||collection} gelöscht`,collection,ref:id,before,after:null});
+ validate(next);return next;
+}
+// Verwandtschaftsverhältnis zwischen Schenker und Empfänger: Es bestimmt den Freibetrag der Schenkungsteuer und steht
+// deshalb wie jede andere Änderung im Protokoll. Ohne Art wird es aufgehoben.
+export function withRelation(s,donorId,recipientId,kind){
+ if(donorId===recipientId)fail('Schenker und Empfänger müssen verschieden sein.');
+ const next=structuredClone(s),before=next.relations.find(r=>r.donorId===donorId&&r.recipientId===recipientId)||null;
+ if((before?.kind||null)===(kind||null))return s;
+ next.relations=next.relations.filter(r=>!(r.donorId===donorId&&r.recipientId===recipientId));
+ const after=kind?{donorId,recipientId,kind}:null;if(after)next.relations.push(after);
+ next.audit.push({at:new Date().toISOString(),action:after?(before?'Verwandtschaft geändert':'Verwandtschaft angelegt'):'Verwandtschaft gelöscht',ref:`relation:${donorId}:${recipientId}`,before,after});
  validate(next);return next;
 }
 export function withYear(s,personId,year,values){
@@ -2437,12 +2548,19 @@ export function statement(s,depotId,year,basis,{replayResult=null}={}){
  const sales=r.moves.filter(m=>m.type==='sell'&&m.depotId===depotId&&m.date>=start&&m.date<=end).map(m=>saleLine(s,m));
  const shows=m=>m.type!=='distribution'&&(basis==='tax'||(m.type!=='vap'&&m.type!=='transition'));
  const ids=[...new Set([...own.map(m=>m.securityId),...[...r.positions.keys()].filter(k=>k.startsWith(depotId+'|')).map(k=>k.split('|')[1])])];
+ // Lose zum Vorjahresende, nur bei Bedarf gerechnet (siehe Anfangswert).
+ let earlier=null;const lotsAtStart=()=>(earlier??=replay(s,{until:`${year-1}-12-31`})).positions;
+ const valuesOfLots=(lots,kind)=>lots.map(l=>({...l,cost:l.cost==null?null:D(l.cost),econ:l.econ==null?null:D(l.econ),basis:l.basis==null?null:D(l.basis),acc:l.acc==null?null:D(l.acc),vap:l.vap==null?null:D(l.vap)})).map(l=>basis==='economic'?economicValue(l):taxValue(l,kind));
  const rows=ids.map(securityId=>{
   const security=s.securities.find(x=>x.id===securityId),mine=own.filter(m=>m.securityId===securityId);
   const before=mine.filter(m=>m.date<start),during=mine.filter(m=>m.date>=start&&shows(m));
   // Ohne Stücke ist der Bestand null, auch wenn ein früherer Anschaffungswert unbekannt war.
-  const openingQuantity=S(sum(before.map(m=>D(m.quantity))));
-  const opening={quantity:openingQuantity,value:D(openingQuantity)===0n?'0':totalOf(before.filter(shows).map(m=>m[valueKey]))};
+  // Dieselbe Regel gilt für die Vorgeschichte: Eine aufgelöste und später neu aufgebaute Position beginnt bekannt.
+  // Bleibt die Summe der früheren Vorgänge offen, obwohl die Lose mit unbekanntem Wert schon abgegangen sind (FIFO),
+  // zählt der Wert der Lose zum Vorjahresende.
+  let oq=0n,ov='0';for(const m of before){oq+=D(m.quantity);if(shows(m))ov=add(ov,m[valueKey]);if(oq===0n)ov='0';}
+  if(ov==null&&oq>0n){const prior=lotsAtStart().get(`${depotId}|${securityId}`)||[],values=valuesOfLots(prior,security.kind);if(sum(prior.map(l=>D(l.quantity)))===oq&&values.every(x=>x!=null))ov=S(sum(values));}
+  const opening={quantity:S(oq),value:ov};
   let q=opening.quantity,v=opening.value;
   const lines=during.map(m=>{q=add(q,m.quantity);v=add(v,m[valueKey]);if(D(q)===0n)v='0';return {eventId:m.eventId,type:m.type,date:m.date,label:labelOf(s,m),note:[noteOf(m,basis)||tradeNote(s,m),averageNote(m,basis)].filter(Boolean).join(' · '),
    quantity:m.quantity,value:m[valueKey],proceeds:m.proceeds,gain:m.type==='sell'?m[gainKey]:m.type==='transfer'&&m.direction==='out'?m[gainKey]:null,balanceQuantity:q,balanceValue:v,year:m.year??null,from:basis==='tax'?fromLots(m):null};});
@@ -2451,7 +2569,10 @@ export function statement(s,depotId,year,basis,{replayResult=null}={}){
   const lots=r.positions.get(`${depotId}|${securityId}`)||[],internal=lots.map(l=>({...l,cost:l.cost==null?null:D(l.cost),econ:l.econ==null?null:D(l.econ),basis:l.basis==null?null:D(l.basis),acc:l.acc==null?null:D(l.acc),vap:l.vap==null?null:D(l.vap)}));
   const lotQuantity=S(sum(lots.map(l=>D(l.quantity)))),lotValues=internal.map(l=>basis==='economic'?economicValue(l):taxValue(l,security.kind));
   const lotValue=lotValues.some(x=>x==null)?null:S(sum(lotValues));
-  const balanced=D(lotQuantity)===D(closing.quantity)&&(lotValue==null&&closing.value==null||lotValue!=null&&closing.value!=null&&D(lotValue)===D(closing.value));
+  // Gegenprobe: Wo die Kette aus Anfangsbestand und Vorgängen einen Wert hat, muss sie den Losbestand treffen. Ist sie
+  // offen, die Lose am Jahresende aber vollständig bekannt (die unbekannten sind abgegangen), gilt deren Wert als Endstand.
+  const balanced=D(lotQuantity)===D(closing.quantity)&&(v==null||lotValue!=null&&D(lotValue)===D(v));
+  if(closing.value==null&&lotValue!=null&&D(lotQuantity)===D(closing.quantity))closing.value=lotValue;
   const price=yearEndPrice(s,securityId,year),market=price&&D(closing.quantity)>0n?S(round(mul(D(closing.quantity),D(price.price)))):null;
   const regimes=[...new Set(lots.map(l=>regimeOf(security.kind,l.group)))].map(k=>REGIMES[k]);
   // Lose zum Jahresende in FIFO-Reihenfolge (nur steuerlich; wirtschaftlich zählt der Durchschnitt): Erwerb, Herkunft, Stück (von ursprünglich) und Wert.
@@ -2509,7 +2630,7 @@ export {GROUPS};
 
 
 ===== DATEI dist/core/undo.mjs =====
-import {withEvent,withoutEvent,withEvents,withoutEvents,withBatch,withoutBatch,withRecord,withoutRecord,withPrice,withVapUnit,withVatRate,withYearRules,withYear,withoutYear} from './model.mjs';
+import {withEvent,withoutEvent,withEvents,withoutEvents,withBatch,withoutBatch,withRecord,withoutRecord,withRelation,withPrice,withVapUnit,withVatRate,withYearRules,withYear,withoutYear} from './model.mjs';
 
 // Änderungen aus dem Protokoll zurücknehmen. Jeder Eintrag trägt den Stand vorher (before) und nachher (after);
 // zurückgenommen wird über dieselben Funktionen wie jede Änderung: geprüft, in abgeschlossenen Jahren gesperrt
@@ -2568,6 +2689,15 @@ export function undoPlan(s,index){
   if(collection==='persons'&&!now)return {ok:false,reason:'Eine gelöschte Person lässt sich nicht wiederherstellen: Ihre Jahresdaten wurden mit gelöscht. Bitte neu anlegen.'};
   if(same(now,a.before))return {ok:false,reason:'Der Eintrag hat schon diesen Stand.'};
   return plan(now?'Auf den Stand vor dieser Änderung zurücksetzen':'Gelöschten Eintrag wiederherstellen',(t,o)=>withRecord(t,collection,a.before,o));
+ }
+
+ // Verwandtschaftsverhältnis: auf die Art davor zurück oder wieder aufheben.
+ if(ref.startsWith('relation:')){
+  const rec=a.before||a.after;if(!rec?.donorId||!rec.recipientId)return {ok:false,reason:'Dieser Eintrag lässt sich nicht automatisch zurücknehmen.'};
+  if(![rec.donorId,rec.recipientId].every(id=>s.persons.some(p=>p.id===id)))return {ok:false,reason:'Eine der beiden Personen gibt es nicht mehr.'};
+  const now=s.relations.find(r=>r.donorId===rec.donorId&&r.recipientId===rec.recipientId)||null;
+  if((now?.kind||null)===(a.before?.kind||null))return {ok:false,reason:'Das Verhältnis hat schon diesen Stand.'};
+  return plan(a.before?'Verwandtschaft davor wiederherstellen':'Verwandtschaft aufheben',t=>withRelation(t,rec.donorId,rec.recipientId,a.before?.kind||null));
  }
 
  if(/^Kurs /.test(a.action)){
@@ -2688,9 +2818,13 @@ async function derive(password,salt,iterations){
 }
 export function checkPassword(password){if(typeof password!=='string'||password.length<12)throw Error('Mindestens 12 Zeichen für das Tresorpasswort verwenden.');}
 
+// Umlaute und Akzente gibt es in zwei Unicode-Schreibweisen (zusammengesetzt und zerlegt), die gleich aussehen, aber
+// verschiedene Schlüssel ergäben. Neue Tresore nehmen die zusammengesetzte Form (NFC); beim Öffnen werden die Eingabe,
+// NFC und NFD versucht, damit ein Tresor auf jedem Gerät aufgeht und ältere Tresore unverändert lesbar bleiben.
+const forms=password=>[...new Set([password,password.normalize('NFC'),password.normalize('NFD')])];
 export async function newSession(password){
  checkPassword(password);const salt=crypto.getRandomValues(new Uint8Array(16));
- return {key:await derive(password,salt,ITERATIONS),salt:b64(salt),iterations:ITERATIONS,revision:0};
+ return {key:await derive(password.normalize('NFC'),salt,ITERATIONS),salt:b64(salt),iterations:ITERATIONS,revision:0};
 }
 export async function seal(state,session){
  validate(state);if(!usable(session.iterations))throw Error('Unzulässige Rundenzahl der Schlüsselableitung.');
@@ -2699,19 +2833,106 @@ export async function seal(state,session){
  const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:encoder.encode(JSON.stringify(header))},session.key,encoder.encode(JSON.stringify(state)));
  return {...header,iv:b64(iv),ciphertext:b64(new Uint8Array(ciphertext))};
 }
-export async function open(envelope,password){
- const e=envelope;
+function checkEnvelope(e){
  if(!e||e.format!==ENVELOPE||e.version!==ENVELOPE_VERSION)throw Error(e?.format==='depotklar-vault'?'Tresor der Version 3. Depotklar 4 verwendet ein neues Datenformat; der Tresor bleibt unverändert erhalten.':'Unbekanntes Tresorformat.');
  if(!usable(e.iterations)||e.kdf!=='PBKDF2-SHA256'||e.cipher!=='AES-256-GCM'||typeof e.ciphertext!=='string'||e.ciphertext.length>150000000||!Number.isSafeInteger(e.revision)||e.revision<1)throw Error('Unbekanntes oder zu großes Tresorformat.');
- let state,key;
- try{
-  const {iv,ciphertext,...header}=e;if(bytes(e.salt).length!==16||bytes(iv).length!==12)throw Error();
-  key=await derive(password,bytes(e.salt),e.iterations);
-  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes(iv),additionalData:encoder.encode(JSON.stringify(header))},key,bytes(ciphertext));
-  state=JSON.parse(decoder.decode(plain));
- }catch{throw Error('Tresor konnte nicht geöffnet werden: Passwort falsch oder Datei beschädigt.');}
+}
+const UNREADABLE='Tresor konnte nicht geöffnet werden: Passwort falsch oder Datei beschädigt.';
+async function decrypt(e,key){
+ const {iv,ciphertext,...header}=e;if(bytes(e.salt).length!==16||bytes(iv).length!==12)throw Error();
+ const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes(iv),additionalData:encoder.encode(JSON.stringify(header))},key,bytes(ciphertext));
+ return JSON.parse(decoder.decode(plain));
+}
+// keys: Zwischenspeicher der abgeleiteten Schlüssel, wenn mehrere Stände desselben Tresors nacheinander geprüft werden.
+export async function open(envelope,password,{keys=null}={}){
+ const e=envelope;checkEnvelope(e);
+ if(typeof password!=='string')throw Error(UNREADABLE);
+ let state=null,key=null;
+ for(const form of forms(password)){
+  try{
+   const id=`${e.salt}|${e.iterations}|${form}`;let k=keys?.get(id);
+   if(!k){k=await derive(form,bytes(e.salt),e.iterations);keys?.set(id,k);}
+   state=await decrypt(e,k);key=k;break;
+  }catch{state=null;}
+ }
+ if(!state)throw Error(UNREADABLE);
  upgrade(state);validate(state);
  return {state,session:{key,salt:e.salt,iterations:e.iterations,revision:e.revision}};
+}
+// Einen anderen Stand desselben Tresors mit dem Schlüssel der offenen Sitzung lesen, ohne das Passwort erneut zu fragen.
+// Geht nur, wenn er mit demselben Passwort gespeichert wurde (gleiches Salz).
+export async function openWithSession(envelope,session){
+ const e=envelope;checkEnvelope(e);
+ if(!session?.key||e.salt!==session.salt||e.iterations!==session.iterations)throw Error('Dieser Stand wurde mit einem anderen Passwort gespeichert: Tresor sperren und mit dem Passwort dieses Stands öffnen.');
+ let state;try{state=await decrypt(e,session.key);}catch{throw Error('Der Stand lässt sich nicht lesen: Die Datei ist beschädigt.');}
+ upgrade(state);validate(state);
+ return {state,session:{...session,revision:e.revision}};
+}
+
+// Kennung eines gespeicherten Stands: Revision und Initialisierungsvektor. Derselbe Stand hat dieselbe Kennung; ein
+// anderswo gespeicherter Stand hat eine andere, auch wenn die Revision zufällig gleich ist.
+export const standOf=e=>e?{revision:e.revision,iv:e.iv}:null;
+export const sameStand=(a,b)=>Boolean(a&&b)&&a.revision===b.revision&&a.iv===b.iv;
+// Hat sich die verbundene Datei geändert, seit dieser Browser sie zuletzt gelesen oder geschrieben hat (seen)?
+// Ohne Vermerk – Verbindungen aus der Zeit vor 4.23 – gilt wie bisher nur eine höhere Revision als Änderung.
+export function fileChanged(fileEnvelope,seen,previousRevision=0){
+ if(!fileEnvelope)return false;
+ return seen?!sameStand(fileEnvelope,seen):fileEnvelope.revision>previousRevision;
+}
+
+// Verhältnis der verbundenen Datei (file) zum Stand dieses Browsers (local). seen ist die Kennung, mit der dieser Browser
+// die Datei zuletzt gelesen oder geschrieben hat.
+// - 'none': keine lesbare Datei. 'same': derselbe Stand.
+// - 'fileBehind': Die Datei ist unverändert, der Browser ist weiter – die Datei darf fortgeschrieben werden.
+// - 'fileAhead': Die Datei wurde anderswo geändert, der Browser hat seither nichts gespeichert – es gilt die Datei, gleich
+//   welche Revision; openBest prüft vorher am Inhalt, ob dem Stand der Datei etwas vom Browser fehlt.
+// - 'both': Beide haben sich geändert – nichts wird von selbst überschrieben, der Anwender entscheidet.
+// Ohne Vermerk (Verbindung aus der Zeit vor 4.23) gilt die Datei mit höherer Revision; sonst ist unklar, wer weiter ist ('both').
+export function fileRelation({local=null,file=null,seen=null}){
+ if(!file)return 'none';
+ if(!local)return 'fileAhead';
+ if(sameStand(file,local))return 'same';
+ if(seen){const fileMoved=!sameStand(file,seen),localMoved=!sameStand(local,seen);return !fileMoved?'fileBehind':localMoved?'both':'fileAhead';}
+ return file.revision>local.revision?'fileAhead':'both';
+}
+
+// Enthält der Stand next alles, was previous enthält? Maßstab ist das Protokoll: Jede Änderung hängt dort einen Eintrag
+// an, entfernt wird keiner. Fehlt next ein Eintrag von previous, trägt previous etwas, das next nicht kennt.
+const continues=(next,previous)=>previous.audit.length<=next.audit.length&&previous.audit.every((a,i)=>JSON.stringify(a)===JSON.stringify(next.audit[i]));
+
+// Welcher Stand beim Öffnen gilt: der dieses Browsers (local), der einer verbundenen Datei (file) oder einer eingelesenen,
+// noch ungeprüften Datei (incoming). Ein Stand aus einer Datei gilt erst, wenn er sich mit dem Passwort öffnen lässt –
+// eine beschädigte Datei ersetzt nie den Stand im Browser.
+// conflict: 'both' (beide geändert, es gilt der Browser) oder 'unreadable' (die Datei wäre maßgeblich, lässt sich mit dem
+// Passwort aber nicht öffnen); in beiden Fällen bleibt die Datei unberührt, bis der Anwender entscheidet.
+// Bevor ein Stand aus einer Datei den des Browsers ersetzt, vergleicht Depotklar beide am Protokoll (continues). Fehlt
+// der verbundenen Datei eine Änderung des Browsers und umgekehrt, wurden beide unabhängig weitergeführt – auch wenn der
+// Browser seinen Stand schon in die Datei geschrieben hatte und sie danach anderswo ersetzt wurde: Das gilt als 'both'.
+// keepLocal: Der Stand aus der Datei gilt, enthält den des Browsers aber nicht vollständig (eingelesene Datei, anderswo
+// auf einen früheren Stand zurückgesetzte Datei) oder der Stand des Browsers ließ sich nicht prüfen – der Aufrufer
+// bewahrt ihn auf. failed: Kandidaten, die sich nicht öffnen ließen.
+export async function openBest({local=null,file=null,incoming=null,seen=null,password}){
+ const relation=fileRelation({local,file,seen});
+ let order=relation==='fileAhead'?['file','local']:relation==='both'?['local','file']:['local'];
+ if(incoming&&!sameStand(incoming,local)&&(!local||incoming.revision>local.revision))order.unshift('incoming');
+ const of={local,file,incoming},keys=new Map(),failed=[];let last=Error('Für diesen Tresor ist nichts gespeichert.');
+ for(const source of order){
+  const envelope=of[source];if(!envelope)continue;
+  let opened;try{opened=await open(envelope,password,{keys});}catch(err){last=err;failed.push(source);continue;}
+  if(source==='local')return {...opened,envelope,source,relation,conflict:relation==='both'?'both':relation==='fileAhead'&&failed.includes('file')?'unreadable':null,failed,keepLocal:false};
+  let keepLocal=false;
+  if(local){
+   const mine=failed.includes('local')?null:await open(local,password,{keys}).catch(()=>null);
+   // Nicht prüfbar (beschädigt, anderes Passwort): aufbewahren, außer die verbundene Datei ist erkennbar weiter.
+   if(!mine)keepLocal=source==='incoming'||relation==='both'||envelope.revision<=local.revision;
+   else if(!continues(opened.state,mine.state)){
+    if(source==='file'&&!continues(mine.state,opened.state))return {...mine,envelope:local,source:'local',relation:'both',conflict:'both',failed,keepLocal:false};
+    keepLocal=true;
+   }
+  }
+  return {...opened,envelope,source,relation,conflict:null,failed,keepLocal};
+ }
+ throw last;
 }
 // Neues Passwort: das bisherige wird über das Öffnen geprüft; frisches Salt und
 // aktuelle Rundenzahl. Der Aufrufer speichert, bevor er die Sitzung umstellt.
@@ -2759,7 +2980,7 @@ export function listVaults(){
   metas.onsuccess=()=>{
    const byId=new Map((metas.result||[]).map(m=>[m.id,m]));
    done((keys.result||[]).map((id,i)=>{const m=byId.get(id)||{};return {id,name:m.name||(id===LEGACY_VAULT?'Tresor':'Tresor ohne Namen'),revision:envs.result?.[i]?.revision||0,salt:envs.result?.[i]?.salt||null,
-    savedAt:m.savedAt||null,fileName:m.fileName||null,linked:Boolean(m.handle),backupRevision:m.backupRevision??null};}).sort((a,b)=>a.name.localeCompare(b.name,'de')));
+    savedAt:m.savedAt||null,fileName:m.fileName||null,linked:Boolean(m.handle),backupRevision:m.backupRevision??null,pending:Boolean(m.incoming)};}).sort((a,b)=>a.name.localeCompare(b.name,'de')));
   };
  });
 }
@@ -3277,6 +3498,7 @@ export function subject(s,a){
  if(a.action==='Jahresdaten bestätigt'||a.action==='Jahresdaten zurückgenommen'){const [p,y]=String(a.ref).split(':');return `${s.persons.find(x=>x.id===p)?.name||'Person'} · ${y}`;}
  if(/^USt-Umrechnungskurs /.test(a.action)){const [,c,m]=String(a.ref).split(':');return `${c} · ${m.slice(5)}/${m.slice(0,4)}`;}
  if(a.action==='Jahresregeln bestätigt'||a.action==='Jahreswerte geändert')return `Jahreswerte ${String(a.ref).split(':')[1]} · alle Personen`;
+ if(String(a.ref).startsWith('relation:')&&r){const person=id=>s.persons.find(p=>p.id===id)?.name||'gelöschte Person';return `${person(r.donorId)} → ${person(r.recipientId)}`;}
  if(r&&r.type&&EVENT_TYPES[r.type]){
   const what=r.type==='transfer'&&TRANSFER_KINDS[r.kind]?TRANSFER_KINDS[r.kind]:r.type==='fx'?`${FX_KINDS[r.kind]||EVENT_TYPES.fx} · ${(s.accounts||[]).find(a=>a.id===r.accountId)?.name||'Konto'}`:EVENT_TYPES[r.type];
   const sec=r.securityId?s.securities.find(x=>x.id===r.securityId)?.name:'';
@@ -3324,6 +3546,7 @@ export function auditTarget(s,a){
  if(/^(Kurs|Vorabpauschale je Anteil) /.test(a.action)){const [securityId,when]=ref.split(':');return s.securities.some(x=>x.id===securityId)?{kind:'prices',securityId,year:year(when)}:null;}
  if(/^USt-Umrechnungskurs /.test(a.action))return {kind:'vat',year:year(ref.split(':')[2])};
  if(ref.startsWith('rules:'))return {kind:'rules'};
+ if(ref.startsWith('relation:'))return {kind:'gifts'};
  return null;
 }
 
@@ -3408,15 +3631,15 @@ export function closingHTML(s,{personId='',year=Number(today().slice(0,4))-1}={}
 
 
 ===== DATEI dist/ui/entry.mjs =====
-import {D,S,mul,sum,round,SCALE} from '../core/decimal.mjs';
+import {D,S,mul,div,sum,round,SCALE} from '../core/decimal.mjs';
 import {KINDS,GROUPS,REGIMES,regimeOf,groupOf,isFund,EXEMPTION,vapYears,vapInflow} from '../core/rules.mjs';
-import {EVENT_TYPES,TRANSFER_KINDS,ALLOCATIONS,FX_KINDS,ACCOUNT_KINDS,TAX_PARTS,roundingOnly,afterExemption,substituteBase,foreignShare,kindWarning,withEvent,withRecord,withBatch,isClosed,isEventClosed,eventPersons,accountHolder,withholdingOf,uid,today,lastSelectableYear} from '../core/model.mjs';
+import {EVENT_TYPES,TRANSFER_KINDS,ALLOCATIONS,FX_KINDS,ACCOUNT_KINDS,TAX_PARTS,roundingOnly,afterExemption,substituteBase,foreignShare,kindWarning,withEvent,withRecord,withBatch,isClosed,isEventClosed,eventPersons,accountHolder,withholdingOf,uid,today,lastSelectableYear,dateWarning} from '../core/model.mjs';
 import {saleLine} from '../core/statement.mjs';
 import {fxReplay,eurValue} from '../core/fx.mjs';
 import {replay} from '../core/ledger.mjs';
 import {giftAssessments} from '../core/gifttax.mjs';
 import {esc,money,euro,pieces,unit,date,field,select,check,decimalInput,inputValue} from './format.mjs';
-import {ecbRate,hasRates,ratesUntil} from './fxrates.mjs';
+import {ecbRate,referenceRate,hasRates,ratesUntil} from './fxrates.mjs';
 
 export const ENTRY_TYPES=[['buy','Kauf'],['sell','Verkauf'],['transfer','Schenkung / Übertrag'],['giftBatch','Schenkung an mehrere'],['distribution','Ausschüttung / Dividende'],['interest','Zinsen'],['otherIncome','Sonstiger Ertrag'],['merger','Fondsverschmelzung'],['exchange','Aktientausch'],['split','Split'],['vap','Vorabpauschale laut Bank'],['fx','Währungskonto'],['opening','Bestand übernehmen'],['transition','Übergang 2017/2018'],['accumulation','Thesaurierung (altes Recht)']];
 export const ENTRY_TITLES=Object.fromEntries(ENTRY_TYPES);
@@ -3451,6 +3674,10 @@ export function draftFromEvent(e,s=null){
  if(e.unitPrice!=null)d.amountMode='unit';
  if(e.fx){d.fxAccount=e.fx.accountId;d.fxAmount=inputValue(e.fx.amount);d.fxRate=e.fx.rateSource==='ecb'?'':inputValue(e.fx.rate);}
  // Ein übernommener EZB-Kurs ist keine Eingabe: beim Speichern gilt der Kurs zum dann gewählten Datum.
+ // Der bisherige Kurs bleibt im Entwurf: Ist die Kurstabelle beim Speichern nicht geladen (Verbindung weg),
+ // gilt er für dasselbe Datum und Konto weiter, statt verloren zu gehen.
+ if(e.rateSource==='ecb'&&e.rate!=null)d.ecbKept={on:e.kind==='opening'?e.acquired||null:e.date,accountId:e.accountId,rate:e.rate,rateDate:e.rateDate};
+ if(e.fx?.rateSource==='ecb'&&e.fx.rate!=null)d.ecbKept={on:e.date,accountId:e.fx.accountId,rate:e.fx.rate,rateDate:e.fx.rateDate};
  if(e.rateSource==='ecb')d.rate='';delete d.rateSource;delete d.rateDate;
  if(d.oldIncomeNone)d.oldIncome='';
  return d;
@@ -3735,7 +3962,10 @@ export function apply(s,d){
 // Ein gesperrter Vorgang zeigt seine Wirkung trotzdem; gespeichert wird nur bei offenem Jahr.
 const viewable=(s,events)=>events.some(e=>isEventClosed(s,e))?(({closing,...rest})=>rest)(s):s;
 
-export function previewHTML(s,d){
+// Hinweise zum Datum stehen über jeder Vorschau, auch der des Währungskontos und der Schenkung an mehrere.
+const dateNotes=d=>[dateWarning(d.date),dateWarning(d.acquired)].filter(Boolean).map(n=>`<div class="notice">${esc(n)}</div>`).join('');
+export function previewHTML(s,d){return dateNotes(d)+previewBody(s,d);}
+function previewBody(s,d){
  if(d.type==='giftBatch')return batchPreviewHTML(s,d);
  s=viewable(s,s.events.filter(e=>e.id===d.id));
  if(d.type==='fx')return fxPreviewHTML(s,d);
@@ -3859,14 +4089,33 @@ function linkedFxFields(s,d){
 }
 // Ohne Kurs laut Abrechnung gilt der EZB-Referenzkurs; er wird mit Quelle und Kurstag gespeichert.
 const ecbHint=a=>!a?'':hasRates(a.currency)?`Leer lassen, dann gilt der EZB-Referenzkurs des Tages (hinterlegt bis ${date(ratesUntil(a.currency))}).`:`Für ${esc(a.currency)} sind keine EZB-Kurse hinterlegt.`;
-function ecbFields(currency,on){const r=on?ecbRate(currency,on):null;return r?{rate:r.rate,rateSource:'ecb',rateDate:r.date}:{};}
+// kept: der bisher gespeicherte EZB-Kurs des Vorgangs; er gilt weiter, wenn für dasselbe Datum und Konto gerade kein
+// Kurs nachgeschlagen werden kann (Kurstabelle nicht geladen).
+function ecbFields(currency,on,kept=null,accountId=null){
+ const r=on?ecbRate(currency,on):null;if(r)return {rate:r.rate,rateSource:'ecb',rateDate:r.date};
+ return kept&&on&&kept.on===on&&kept.accountId===accountId?{rate:kept.rate,rateSource:'ecb',rateDate:kept.rateDate}:{};
+}
+// Tippfehler abfangen: Ein Devisenkurs, der um mehr als das Dreifache vom EZB-Referenzkurs des Tages abweicht, ist keiner –
+// meist steht ein Punkt statt des Dezimalkommas („1.085“ liest Depotklar als 1085) oder Betrag und EUR-Betrag passen nicht
+// zusammen. Nach dem Ende der hinterlegten Reihe dient ihr letzter Kurs als Vergleich. Ohne Referenzkurs (andere Währung,
+// Tabelle nicht geladen, Tag vor ihrem Beginn) keine Prüfung.
+function plausibleRate(currency,on,rate,implied=null){
+ const ref=on&&rate!=null?referenceRate(currency,on):null;if(!ref)return;
+ const r=D(rate),e=D(ref.rate);if(r<=0n||(r<=e*3n&&r*3n>=e))return;
+ const shown=v=>inputValue(S(round(D(v),4))),hint=`${ref.last?'letzten hinterlegten ':''}EZB-Referenzkurs vom ${date(ref.date)}: ${shown(ref.rate)} ${currency} je 1 EUR`;
+ throw Error(implied?`${implied} Das ergäbe einen Kurs von ${shown(rate)} ${currency} je 1 EUR (${hint}). Bitte die Beträge prüfen – Dezimalstellen mit Komma eingeben.`
+  :`Devisenkurs ${shown(rate)} passt nicht zum ${hint}. Bitte prüfen – Dezimalstellen mit Komma eingeben (1,085); „1.085“ liest Depotklar als 1085.`);
+}
 function linkFx(s,e,d){
  if(!d.fxAccount)return;
  const amount=decimalInput(d.fxAmount),rate=decimalInput(d.fxRate),a=(s.accounts||[]).find(x=>x.id===d.fxAccount);
  if(amount==null)throw Error('Betrag auf dem Währungskonto fehlt.');
  e.fx={accountId:d.fxAccount,amount};
- if(d.type==='distribution'||d.type==='interest'){if(rate!=null)e.fx.rate=rate;else if(a)Object.assign(e.fx,ecbFields(a.currency,e.date));}
+ if(a&&rate!=null)plausibleRate(a.currency,e.date,rate);
+ if(d.type==='distribution'||d.type==='interest'){if(rate!=null)e.fx.rate=rate;else if(a)Object.assign(e.fx,ecbFields(a.currency,e.date,d.ecbKept,a.id));}
  else if(rate!=null)e.fx.rate=rate;
+ // Kauf und Verkauf ohne Kurs: Der EUR-Betrag der Abrechnung gilt als Wert des Währungsbetrags – beide müssen zusammenpassen.
+ else if(a&&e.amount!=null&&D(e.amount)>0n&&D(amount)>0n)plausibleRate(a.currency,e.date,S(div(D(amount),D(e.amount))),`Der Betrag von ${inputValue(amount)} ${a.currency} passt nicht zum EUR-Betrag ${inputValue(e.amount)}.`);
 }
 
 function fxEvent(s,d){
@@ -3881,7 +4130,11 @@ function fxEvent(s,d){
  // Konten braucht keinen EUR-Wert.
  const eur=decimalInput(d.eur),rate=decimalInput(d.rate),target=(s.accounts||[]).find(x=>x.id===e.toAccountId);
  const needed=e.kind!=='inheritance'&&(e.kind!=='transfer'||a.kind==='interest'||target?.kind==='interest');
- if(eur!=null)e.eur=eur;else if(rate!=null)e.rate=rate;else if(needed)Object.assign(e,ecbFields(a.currency,e.kind==='opening'?e.acquired:e.date));
+ // Tag, an dem der EUR-Wert gilt: beim übernommenen Bestand der Anschaffungstag (ohne ihn keine Prüfung möglich).
+ const on=e.kind==='opening'?e.acquired||null:e.date;
+ if(eur!=null){if(D(eur)>0n&&D(amount)>0n)plausibleRate(a.currency,on,S(div(D(amount),D(eur))),`Der EUR-Betrag ${inputValue(eur)} passt nicht zu ${inputValue(amount)} ${a.currency}.`);e.eur=eur;}
+ else if(rate!=null){plausibleRate(a.currency,on,rate);e.rate=rate;}
+ else if(needed)Object.assign(e,ecbFields(a.currency,on,d.ecbKept,a.id));
  if(d.note?.trim())e.note=d.note.trim();
  return e;
 }
@@ -3907,7 +4160,7 @@ export function fxFormHTML(s,d,error=''){
  const rule=a&&kind==='exchange'?`<p class="hint wide">Ein Tausch: Die abgehende Währung gilt zum EUR-Wert des Tauschs als veräußert${a.kind==='payment'?' (steuerbar nur innerhalb eines Jahres nach der Anschaffung)':''}, das Zielkonto beginnt mit einem neuen Los zu diesem Wert und Tag. Leer gilt der EZB-Referenzkurs der abgehenden Währung.</p>`:a&&gratis?`<p class="hint wide">Das Zielkonto übernimmt Anschaffungstag und EUR-Wert der Beträge, die ältesten zuerst (§ 23 Abs. 1 S. 3 und § 20 Abs. 4 S. 6 EStG). Das ist keine Veräußerung.${kind==='gift'?' Der Wert am Tag der Schenkung zählt für die Schenkungsteuer; leer gilt der EZB-Referenzkurs des Tages.':''}</p>`:a?`<p class="hint wide">${esc(ACCOUNT_KINDS[a.kind])}. ${a.kind==='interest'?'Jeder Abgang ist eine Veräußerung; der Währungsgewinn ist Kapitalertrag.':`Steuerbar ist nur ein Abgang innerhalb eines Jahres nach der Anschaffung; verbraucht werden die ältesten Beträge zuerst.${kind==='transfer'?' Ein Übertrag auf ein verzinstes Konto gilt als Veräußerung und braucht den EUR-Wert.':''}`}</p>`:'';
  return `<form class="entry" data-form="entry" data-type="fx" ${d.id?`data-id="${esc(d.id)}"`:''}>${locked?lockedNotice(s,original):''}<p class="hint">${esc(HELP.fx)}</p>
   <fieldset class="grid" ${locked?'disabled':''}>${fields.join('')}${rule}</fieldset>
-  <div id="entry-preview" class="preview">${fxPreviewHTML(s,d)}</div>${error?`<p class="error">${esc(error)}</p>`:''}
+  <div id="entry-preview" class="preview">${previewHTML(s,d)}</div>${error?`<p class="error">${esc(error)}</p>`:''}
   ${formActions(locked,d.id?`<button type="button" class="button danger" data-action="delete-event" data-id="${esc(d.id)}">Löschen</button>`:'',d.id?'Änderung speichern':'Speichern')}</form>`;
 }
 
@@ -4038,7 +4291,7 @@ export function batchFormHTML(s,d,error=''){
  const table=`<div class="batch" data-rows><table class="rows"><thead><tr><th>#</th><th>An Depot</th><th class="num">${mode==='ratio'?'Anteil':'Stück'}</th><th></th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}${r.id?`<input type="hidden" name="row_id_${i}" value="${esc(r.id)}">`:''}</td><td><select name="row_toDepotId_${i}" aria-label="Zieldepot ${i+1}">${targets.map(([v,l])=>`<option value="${esc(v)}" ${v===(r.toDepotId||'')?'selected':''}>${esc(l)}</option>`).join('')}</select></td><td><input name="row_value_${i}" value="${esc(r.value||'')}" inputmode="decimal" aria-label="${mode==='ratio'?'Anteil':'Stück'} ${i+1}" placeholder="${mode==='ratio'?'z. B. 1':'Stück'}"></td><td class="row-tools"><button type="button" class="icon" data-action="batch-row-up" data-index="${i}" aria-label="Nach oben" ${i?'':'disabled'}>↑</button><button type="button" class="icon" data-action="batch-row-remove" data-index="${i}" aria-label="Zeile entfernen">×</button></td></tr>`).join('')}</tbody></table><button type="button" class="link" data-action="batch-row-add">+ Empfänger</button>${mode==='ratio'?'<small>Verhältnis frei wählbar: 1 : 1 : 2, Prozent oder Bruchteile. Depotklar rundet auf die Genauigkeit der Gesamtstückzahl, die Summe stimmt immer.</small>':''}</div>`;
  return `<form class="entry" data-form="entry" data-type="giftBatch">${locked?lockedNotice(s,members.find(e=>isEventClosed(s,e))):''}<p class="hint">${esc(HELP.giftBatch)}</p>
   <fieldset class="grid" ${locked?'disabled':''}>${fields.join('')}<p class="hint wide">${esc(allocationHint)}</p>${table}${field('note','Beleg / Notiz (optional)',d.note,'maxlength="200"')}</fieldset>
-  <div id="entry-preview" class="preview">${batchPreviewHTML(s,d)}</div>
+  <div id="entry-preview" class="preview">${previewHTML(s,d)}</div>
   ${error?`<p class="error">${esc(error)}</p>`:''}
   ${formActions(locked,d.existing?`<button type="button" class="button danger" data-action="delete-event" data-batch="${esc(d.batchId)}">Alle löschen</button>`:'',d.existing?'Änderung speichern':'Speichern')}</form>`;
 }
@@ -4109,7 +4362,8 @@ export const euro=(v,fallback='Offen')=>v==null?fallback:nf2.format(Number(v))+'
 export const exact=v=>v==null?'':nfExact.format(Number(v));
 export const pieces=v=>v==null?'—':nfExact.format(Number(v));
 export const unit=v=>v==null?'—':nf4.format(Number(v));
-export const date=d=>d?d.split('-').reverse().join('.'):'—';
+// Maskiert: ein Datum aus einer fremden Tresordatei kann beliebiger Text sein.
+export const date=d=>d?esc(String(d).split('-').reverse().join('.')):'—';
 export const num=(v,cls='')=>`<td class="num${cls?' '+cls:''}${v!=null&&Number(v)<0?' neg':''}" title="${esc(exact(v))}">${money(v)}</td>`;
 export const sign=v=>v==null?'':Number(v)<0?'neg':Number(v)>0?'pos':'';
 export const statusLabel={supported:'Ermittelt',incomplete:'Angaben fehlen',unsupported:'Außerhalb des Modells',none:'Keine Erträge erfasst'};
@@ -4121,10 +4375,15 @@ export const check=(name,label,checked)=>`<label class="check"><input type="chec
 // Tausenderpunkte. Ohne Komma gilt ein einzelner Punkt vor genau drei Ziffern als
 // Tausenderpunkt („19.000“), sonst als Dezimalpunkt („78.20“, „0.025“). Leer bleibt
 // leer (unbekannt). Formulare werden immer mit Komma vorbelegt, damit der Rückweg eindeutig ist.
+// Devisenkurse prüft die Erfassung zusätzlich gegen den EZB-Referenzkurs: „1.085“ wäre sonst unbemerkt 1085.
 export function decimalInput(value){
  const s=String(value??'').trim().replace(/\s|€/g,'');if(!s)return null;
  const dots=(s.match(/\./g)||[]).length;
- const normalized=s.includes(',')?s.replace(/\./g,'').replace(',','.'):dots>1||/^-?[1-9]\d{0,2}\.\d{3}$/.test(s)?s.replace(/\./g,''):s;
+ // Englische Schreibweise mit beiden Zeichen („1,234.56“): Steht der Punkt hinter dem letzten Komma, ist er der
+ // Dezimaltrenner und die Kommas gliedern Tausender. Alles andere mit Komma vor dem Punkt ist mehrdeutig und wird abgelehnt.
+ const english=s.includes(',')&&s.includes('.')&&s.lastIndexOf('.')>s.lastIndexOf(',');
+ if(english&&!/^-?\d{1,3}(,\d{3})+\.\d+$/.test(s))throw Error(`„${value}“ ist kein gültiger Betrag.`);
+ const normalized=english?s.replace(/,/g,''):s.includes(',')?s.replace(/\./g,'').replace(',','.'):dots>1||/^-?[1-9]\d{0,2}\.\d{3}$/.test(s)?s.replace(/\./g,''):s;
  if(!/^-?\d+(\.\d+)?$/.test(normalized))throw Error(`„${value}“ ist kein gültiger Betrag.`);
  const [whole,frac='']=normalized.replace('-','').split('.');
  if(frac.length>12)throw Error(`„${value}“ hat mehr als 12 Nachkommastellen.`);
@@ -4170,6 +4429,14 @@ export function ecbRate(currency,date){
  return {rate:t.values[hit],date:iso(t.days[hit])};
 }
 
+// Vergleichskurs für die Prüfung einer Eingabe (kein Vorschlag): der Kurs des Tages, nach dem Ende der hinterlegten
+// Reihe ihr letzter Wert. Für die Frage, ob ein Kurs um mehr als das Dreifache danebenliegt, genügt auch ein älterer.
+export function referenceRate(currency,date){
+ const exact=ecbRate(currency,date);if(exact)return exact;
+ const t=tables.get(currency);if(!t||!date||!/^\d{4}-\d{2}-\d{2}$/.test(date)||day(date)<=t.last||!t.days.length)return null;
+ return {rate:t.values.at(-1),date:iso(t.days.at(-1)),last:true};
+}
+
 
 ===== DATEI dist/ui/gifts.mjs =====
 import {replay} from '../core/ledger.mjs';
@@ -4207,7 +4474,7 @@ export function giftsHTML(s){
 
 ===== DATEI dist/ui/importer.mjs =====
 import {D,S,div} from '../core/decimal.mjs';
-import {FX_KINDS,accountHolder,isEventClosed,validateEvent,validDate,withEvents,uid} from '../core/model.mjs';
+import {FX_KINDS,accountHolder,isEventClosed,validateEvent,validDate,dateWarning,withEvents,uid} from '../core/model.mjs';
 import {fxReplay,eurValue} from '../core/fx.mjs';
 import {replay} from '../core/ledger.mjs';
 import {draftToEvent} from './entry.mjs';
@@ -4265,8 +4532,9 @@ function day(v){
  const x=cellValue(v);if(x==null||x==='')throw Error('Datum fehlt.');
  let iso=null;
  if(x instanceof Date)iso=Number.isNaN(x.getTime())?null:x.toISOString().slice(0,10);
- else if(typeof x==='number')iso=new Date(Date.UTC(1899,11,30)+Math.round(x)*864e5).toISOString().slice(0,10);
- else{const t=String(x).trim(),de=/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/.exec(t);
+ // Seriennummer mit Uhrzeit (Nachkommaanteil): Es zählt der Tag, nicht der nächste ab 12 Uhr.
+ else if(typeof x==='number')iso=new Date(Date.UTC(1899,11,30)+Math.floor(x)*864e5).toISOString().slice(0,10);
+ else{const t=String(x).trim(),de=/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})(?:[ T]+\d{1,2}:\d{2}(?::\d{2})?)?$/.exec(t);
   iso=de?`${de[3].length===2?'20'+de[3]:de[3]}-${de[2].padStart(2,'0')}-${de[1].padStart(2,'0')}`:/^\d{4}-\d{2}-\d{2}/.test(t)?t.slice(0,10):null;}
  if(!iso||!validDate(iso))throw Error(`Datum „${text(x)}“ ist ungültig.`);
  return iso;
@@ -4360,15 +4628,20 @@ const keyOf=e=>{const account=e.type==='fx'?e.accountId:e.fx?.accountId,amount=e
 
 // Vorschau und Ergebnis: je Zeile neu, schon erfasst oder Fehler; next ist der Stand nach der Übernahme (nur ohne Fehler).
 export function planImport(s,rows,{file=''}={}){
- const findAccount=accountFinder(s),known=new Set(s.events.map(keyOf).filter(Boolean)),lines=[];
+ // Schon erfasste Bewegungen je Schlüssel gezählt: Zwei echte gleiche Buchungen am selben Tag sind zwei Bewegungen –
+ // ist erst eine davon erfasst, gilt nur eine Zeile der Datei als „schon erfasst“, die zweite kommt neu hinzu.
+ const findAccount=accountFinder(s),known=new Map(),lines=[];
+ for(const k of s.events.map(keyOf).filter(Boolean))known.set(k,(known.get(k)||0)+1);
  for(const {row,raw} of rows){
-  const line={row,raw,status:'error',message:'',event:null};lines.push(line);
+  const line={row,raw,status:'error',message:'',warning:null,event:null};lines.push(line);
   try{
    const {event}=draftToEvent(s,toDraft(s,raw,findAccount));
    validateEvent(s,event,null,{fresh:true});
    if(isEventClosed(s,event))throw Error(`${event.date.slice(0,4)} ist abgeschlossen.`);
-   line.event=event;line.status=known.has(keyOf(event))?'duplicate':'new';
-   if(line.status==='duplicate')line.message='Schon erfasst, wird übersprungen.';
+   const k=keyOf(event),left=known.get(k)||0;
+   line.event=event;line.status=left>0?'duplicate':'new';
+   if(left>0){known.set(k,left-1);line.message='Schon erfasst, wird übersprungen.';}
+   else line.warning=dateWarning(event.date);
   }catch(err){line.message=err.message;}
  }
  const fresh=lines.filter(l=>l.status==='new').map(l=>l.event),count=k=>lines.filter(l=>l.status===k).length;
@@ -4393,7 +4666,8 @@ export function importPreviewHTML(plan){
  };
  const ordered=[...plan.lines.filter(l=>l.status==='error'),...plan.lines.filter(l=>l.status!=='error')],shown=ordered.slice(0,SHOWN);
  const badge={new:'<span class="tag add">neu</span>',duplicate:'<span class="tag">schon erfasst</span>',error:'<span class="tag del">Fehler</span>'};
- const rows=shown.map(l=>`<tr class="${l.status==='error'?'warn':''}"><td class="num">${l.row}</td>${cells(l)}<td>${badge[l.status]}${l.message?`<small>${esc(l.message)}</small>`:''}</td></tr>`).join('');
+ const rows=shown.map(l=>`<tr class="${l.status==='error'||l.warning?'warn':''}"><td class="num">${l.row}</td>${cells(l)}<td>${badge[l.status]}${l.message?`<small>${esc(l.message)}</small>`:''}${l.warning?`<small>${esc(l.warning)}</small>`:''}</td></tr>`).join('');
+ const odd=plan.lines.filter(l=>l.warning).length;
  // Bestand je Konto vorher und nachher, damit sich das Ergebnis mit dem Kontoauszug vergleichen lässt.
  let effect='';
  if(plan.next){
@@ -4403,7 +4677,8 @@ export function importPreviewHTML(plan){
  }
  const summary=`${c.new} ${c.new===1?'neue Bewegung':'neue Bewegungen'}${c.duplicate?`, ${c.duplicate} schon erfasst (werden übersprungen)`:''}${c.error?`, ${c.error} mit Fehler`:''}.`;
  const blocked=c.error?'<div class="notice"><strong>Noch nichts übernommen.</strong> Bitte die Zeilen mit Fehler in der Datei korrigieren und die Datei erneut einlesen. Übernommen wird erst, wenn keine Zeile einen Fehler hat.</div>':plan.problem?`<div class="notice"><strong>So lässt sich die Datei nicht übernehmen.</strong> ${esc(plan.problem)}</div>`:!c.new?'<p class="ok">Alle Zeilen sind schon erfasst. Es gibt nichts zu übernehmen.</p>':'';
- return `<div class="import"><p>${esc(plan.file)} · ${esc(summary)}</p>${blocked}${effect}
+ const dates=odd&&!c.error?`<div class="notice"><strong>${odd} ${odd===1?'Zeile hat':'Zeilen haben'} ein auffälliges Datum.</strong> Bitte vor der Übernahme prüfen – ein Tippfehler im Jahr lässt die Bewegung im gemeinten Jahr fehlen.</div>`:'';
+ return `<div class="import"><p>${esc(plan.file)} · ${esc(summary)}</p>${blocked}${dates}${effect}
   <div class="table-wrap"><table class="list compact"><thead><tr><th class="num">Zeile</th><th>Datum</th><th>Konto</th><th>Art</th><th class="num">Betrag</th><th class="num">EUR</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
   ${ordered.length>SHOWN?`<p class="hint">${ordered.length-SHOWN} weitere Zeilen ohne Fehler sind nicht einzeln gezeigt.</p>`:''}
   <p class="hint">Jede Bewegung steht danach einzeln im Kontoblatt und im Protokoll. Der ganze Import lässt sich im Protokoll mit „Rückgängig“ zurücknehmen.</p>
@@ -4526,8 +4801,18 @@ export {securityPages};
 const COLORS={economic:[31,79,143],tax:[148,86,15],plain:[16,24,40]};
 const FILLS={economic:[237,243,251],tax:[251,243,230],plain:[242,244,247]};
 const HEAD=['Vorgang','Datum','Stück','Wert','Erlös','Gewinn','Bestand Stück','Bestand Wert'];
-// Standardschrift Helvetica kennt nur WinAnsi: Zeichen außerhalb ersetzen.
-const plain=v=>String(v??'').replace(/[→⇒]/g,'->').replace(/[≤]/g,'<=').replace(/[≥]/g,'>=').replace(/[  ]/g,' ');
+// Standardschrift Helvetica kennt nur WinAnsi (Latin-1 und wenige Zeichen wie € – „ “): Schon ein einzelnes anderes Zeichen
+// entstellt in jsPDF den ganzen Text. Deshalb übliche Zeichen umschreiben, bei Buchstaben außerhalb von WinAnsi die Akzente
+// weglassen (ź → z, Č → C) und alles Übrige durch ein Fragezeichen ersetzen.
+const WINANSI_EXTRA='€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const TRANSLIT={'−':'-','‐':'-','‑':'-','‒':'-','―':'-','′':"'",'″':'"','≈':'~','≠':'!=','№':'Nr.','Ł':'L','ł':'l','Đ':'D','đ':'d','ı':'i','Ħ':'H','ħ':'h','Ŧ':'T','ŧ':'t','ĸ':'k','ŉ':"'n",'ẞ':'SS','∑':'Summe','✓':'ok','✔':'ok'};
+const winAnsi=text=>text.replace(/[^\u0000-\u00ff]/gu,c=>{
+ if(WINANSI_EXTRA.includes(c))return c;if(Object.hasOwn(TRANSLIT,c))return TRANSLIT[c];
+ const bare=c.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ return bare&&!/[^\u0000-\u00ff]/u.test(bare)?bare:'?';
+});
+const plain=v=>winAnsi(basicText(v));
+const basicText=v=>String(v??'').replace(/[→⇒]/g,'->').replace(/[≤]/g,'<=').replace(/[≥]/g,'>=').replace(/[  ]/g,' ');
 const span=(from,to)=>from===to?String(to):`${from}–${to}`;
 const toneOf=title=>/^Wirtschaftliche/.test(title||'')?'economic':/^Steuerliche/.test(title||'')?'tax':'plain';
 // Matrix der Lose im Querformat: höchstens so viele Jahresspalten, ältere Abgänge in einer Spalte (Excel zeigt jedes Jahr).
@@ -4825,8 +5110,9 @@ export const isoDate=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
 // Sperren, Sicherung, Passwortwechsel und Tresorwechsel warten mit flush() auf alle offenen
 // Aufträge. Ein Fehler bleibt stehen, bis ein späterer Auftrag gelingt.
 //
-// checkFile: prüft vor dem Speichern, ob eine verbundene Datei anderswo neuer geworden ist
-// (dann wird nichts gespeichert). writeFile: schreibt danach in die Datei; scheitert das,
+// checkFile: läuft vor dem Speichern; wirft es, wird nichts gespeichert. Die Anwendung prüft dort,
+// ob eine verbundene Datei anderswo geändert wurde, und merkt dann einen Konflikt vor – gespeichert
+// wird in dem Fall nur im Browser. writeFile: schreibt danach in die Datei; scheitert das,
 // ist der Stand im Browser gesichert, die Datei aber nicht aktuell (fileError).
 export function createSaver({seal,save,getSession,setSession,getVault,checkFile=null,writeFile=null}){
  let chain=Promise.resolve(),pending=0,error=null,fileError=null;
@@ -5155,7 +5441,7 @@ import {esc,field} from './format.mjs';
 import {APP_VERSION} from '../core/model.mjs';
 
 const fileInput=(label,cls)=>`<label class="${cls} file">${label}<input type="file" accept=".depotklar,.json,application/json" data-action="import-backup" hidden></label>`;
-const backupNote=v=>v.linked?`Datei: ${esc(v.fileName||'verbunden')}`:v.backupRevision?`Sicherung Revision ${v.backupRevision}${v.backupRevision<v.revision?', seither geändert':''}`:'keine Sicherung vermerkt';
+const backupNote=v=>(v.pending?'eingelesene Datei wird beim Öffnen geprüft · ':'')+(v.linked?`Datei: ${esc(v.fileName||'verbunden')}`:v.backupRevision?`Sicherung Revision ${v.backupRevision}${v.backupRevision<v.revision?', seither geändert':''}`:'keine Sicherung vermerkt');
 
 // Sperrbildschirm: Tresor wählen und öffnen, neuen Tresor anlegen oder eine Tresordatei öffnen.
 // Ohne sicheren Kontext (HTTPS oder localhost) stellt der Browser keine Verschlüsselung (Web Crypto) bereit: dann lässt
@@ -5176,20 +5462,33 @@ export function lockHTML({vaults=[],selected=null,mode='open',error='',busy=fals
   <p class="muted small">Depotklar ${esc(APP_VERSION)} · Tresore der Version 3 werden nicht gelesen und bleiben unverändert im Browser.</p></main>`;
 }
 
-export function vaultPageHTML({demo,vault={name:'Tresor'},revision=0,savedAt=null,backupRevision=null,fileAccess=false,file=null,error=null,fileError=null}){
+// Datei und Browser haben verschiedene Stände: Depotklar überschreibt nichts von selbst. Erklärung und die Wege heraus.
+// conflict 'both': beide wurden geändert; 'unreadable': die Datei ließ sich mit dem Passwort nicht öffnen.
+export function fileConflictHTML(file,revision){
+ const name=esc(file?.name||'Tresordatei'),rev=file?.fileRevision!=null?` (Revision ${esc(file.fileRevision)})`:'',unreadable=file?.conflict==='unreadable';
+ return `<div class="notice" role="alert"><strong>Die Datei und dieser Browser haben verschiedene Stände.</strong> ${unreadable
+   ?`Die Datei ${name}${rev} ließ sich mit Ihrem Passwort nicht öffnen: Sie ist beschädigt oder wurde mit einem anderen Passwort gespeichert.`
+   :`Die Datei ${name}${rev} wurde anderswo geändert, und dieser Browser hat eigene Änderungen (Revision ${esc(revision)}).`} Geöffnet ist der Stand dieses Browsers. Depotklar überschreibt nichts von selbst: Bis Sie entscheiden, wird nur im Browser gespeichert, die Datei bleibt, wie sie ist.</div>
+  <div class="actions"><span></span>${unreadable?'':'<button class="button" data-action="file-take">Stand der Datei übernehmen</button>'}<button class="button" data-action="save-as-file">Diesen Stand in eine neue Datei speichern</button><button class="button danger" data-action="file-overwrite">Datei mit diesem Stand überschreiben</button><button class="button" data-action="unlink-file">Verbindung lösen</button></div>`;
+}
+
+// kept: ein Stand dieses Browsers, den ein Stand aus einer Datei ersetzt hat – aufbewahrt, bis der Anwender ihn verwirft.
+export function vaultPageHTML({demo,vault={name:'Tresor'},revision=0,savedAt=null,backupRevision=null,fileAccess=false,file=null,error=null,fileError=null,kept=null}){
  if(demo)return `<div class="page-head"><div><h1>Tresor</h1><p>Sie sehen die Demo mit fiktiven Daten. Änderungen werden nicht gespeichert.</p></div></div><section class="card"><div class="actions"><button class="button" data-action="demo-reset">Demo zurücksetzen</button><button class="button primary" data-action="leave-demo">Eigenen Tresor verwenden</button></div></section>`;
  const status=error?`<div class="notice"><strong>Nicht gespeichert.</strong> ${esc(error)}${fileAccess?' <button class="link" data-action="save-as-file">Aktuellen Stand in eine neue Datei speichern</button>':''}</div>`
-  :fileError?`<div class="notice"><strong>Im Browser gespeichert, die Datei ist nicht aktuell.</strong> ${esc(fileError)}</div>`:'';
- const fileCard=file?.handle?`<p>Verbunden mit <strong>${esc(file.name||'Tresordatei')}</strong>. Jede Änderung wird dort ebenfalls verschlüsselt gespeichert; ist die Datei anderswo neuer geworden, speichert Depotklar nicht darüber.</p>${file.granted?'':'<p class="notice">Der Browser hat den Zugriff auf die Datei in dieser Sitzung noch nicht erlaubt.</p>'}<div class="actions"><span></span>${file.granted?'':'<button class="button primary" data-action="grant-file">Zugriff erlauben</button>'}<button class="button" data-action="unlink-file">Verbindung lösen</button></div>`
+  :fileError&&!file?.conflict?`<div class="notice"><strong>Im Browser gespeichert, die Datei ist nicht aktuell.</strong> ${esc(fileError)}</div>`:'';
+ const keptNote=kept?`<div class="notice info"><strong>Aufbewahrter Stand.</strong> ${esc(kept.reason||'Früherer Stand dieses Browsers')} – Revision ${esc(kept.revision)}${kept.when?`, aufbewahrt am ${esc(kept.when)}`:''}. Depotklar hat ihn nicht gelöscht, als ein anderer Stand an seine Stelle trat. „Wiederherstellen“ tauscht ihn mit dem jetzigen Stand; der jetzige wird dafür aufbewahrt.<div class="actions"><span></span><button class="button" data-action="kept-drop">Verwerfen</button><button class="button" data-action="kept-download">Herunterladen</button><button class="button" data-action="kept-restore">Wiederherstellen</button></div></div>`:'';
+ const fileCard=file?.handle&&file.conflict?fileConflictHTML(file,revision)
+  :file?.handle?`<p>Verbunden mit <strong>${esc(file.name||'Tresordatei')}</strong>. Jede Änderung wird dort ebenfalls verschlüsselt gespeichert; wurde die Datei anderswo geändert, speichert Depotklar nicht darüber, sondern fragt.</p>${file.granted?'':'<p class="notice">Der Browser hat den Zugriff auf die Datei in dieser Sitzung noch nicht erlaubt.</p>'}<div class="actions"><span></span>${file.granted?'':'<button class="button primary" data-action="grant-file">Zugriff erlauben</button>'}<button class="button" data-action="unlink-file">Verbindung lösen</button></div>`
   :fileAccess?'<p>Jede Änderung zusätzlich verschlüsselt in einer Datei speichern, zum Beispiel auf OneDrive oder einem Netzlaufwerk. Dieselbe Datei lässt sich auf einem anderen Gerät öffnen; geändert wird sie aber besser nur an einem Ort zur selben Zeit.</p><div class="actions"><span></span><button class="button primary" data-action="link-file">Mit Datei verbinden …</button></div>'
   :'<p class="muted">Speichern in eine Datei geht nur in Chrome und Edge. In diesem Browser bleibt die Sicherungsdatei.</p>';
- return `<div class="page-head"><div><h1>Tresor · ${esc(vault.name)}</h1><p>AES-256-GCM, Schlüssel per PBKDF2 aus Ihrem Passwort. Gespeichert wird nach jeder Änderung; nach zehn Minuten ohne Eingabe sperrt sich der Tresor.</p></div></div>${status}
+ return `<div class="page-head"><div><h1>Tresor · ${esc(vault.name)}</h1><p>AES-256-GCM, Schlüssel per PBKDF2 aus Ihrem Passwort. Gespeichert wird nach jeder Änderung; nach zehn Minuten ohne Eingabe sperrt sich der Tresor.</p></div></div>${status}${keptNote}
   <div class="columns">
    <section class="card"><h2>Sicherung</h2><p>Stand: Revision ${revision}${savedAt?` · zuletzt gespeichert ${esc(savedAt)}`:''}. Letzte heruntergeladene Sicherung: ${backupRevision?`Revision ${backupRevision}`:'keine vermerkt (vermerkt wird erst seit 4.8)'}.</p><p class="hint">Die Sicherungsdatei ist verschlüsselt und lässt sich nur mit dem Passwort öffnen, das beim Speichern galt.</p>
     <div class="actions"><span></span><button class="button primary" data-action="download-backup">Sicherung herunterladen</button></div></section>
    <section class="card"><h2>Datei</h2>${fileCard}</section>
    <section class="card"><h2>Tresore</h2><form data-form="vault-name">${field('name','Name dieses Tresors',vault.name,'required maxlength="60"')}<div class="actions"><span></span><button class="button">Umbenennen</button></div></form>
-    <p class="hint">Eine Tresordatei wird als eigener Tresor geöffnet und ersetzt keinen vorhandenen. Neue Tresore entstehen nach dem Sperren auf der Startseite des Tresors.</p>
+    <p class="hint">Eine Tresordatei wird als eigener Tresor geöffnet und ersetzt keinen vorhandenen. Gehört sie zu einem Tresor, den es hier schon gibt, und ist sie neuer, prüft Depotklar sie beim nächsten Öffnen mit dem Passwort und übernimmt sie erst dann. Neue Tresore entstehen nach dem Sperren auf der Startseite des Tresors.</p>
     <div class="actions"><span></span>${fileAccess?'<button class="button" data-action="open-file">Tresordatei öffnen …</button>':fileInput('Tresordatei einlesen','button')}<button class="button" data-action="switch-vault">Tresor wechseln</button></div></section>
    <section class="card"><h2>Passwort ändern</h2><form data-form="rekey">${field('current','Bisheriges Passwort','','type="password" autocomplete="current-password" required')}${field('next','Neues Passwort','','type="password" autocomplete="new-password" minlength="12" required')}${field('repeat','Neues Passwort wiederholen','','type="password" autocomplete="new-password" minlength="12" required')}<div class="actions"><span class="hint">Ältere Sicherungsdateien behalten das bisherige Passwort.</span><button class="button">Passwort ändern</button></div></form></section>
    <section class="card"><h2>Sperren</h2><p>Entfernt den Schlüssel aus dem Arbeitsspeicher. Ohne verbundene Datei erinnert Depotklar vorher an die Sicherung.</p><div class="actions"><span></span><button class="button" data-action="lock">Jetzt sperren</button></div></section>
@@ -5725,13 +6024,16 @@ function sheetHead(ws,title,lines){
 }
 
 // Blattnamen höchstens 31 Zeichen; liegt ein Wertpapier in mehreren Depots, folgt der Depotname.
+// Excel unterscheidet Blattnamen nicht nach Groß- und Kleinschreibung, erlaubt kein Hochkomma am Anfang oder Ende
+// und reserviert „History“ – sonst bricht die ganze Ausgabe ab.
 function sheetMaker(book){
- const used=new Set(),clean=t=>t.replace(/[\\/*?:[\]]/g,' ').trim();
+ const used=new Set(),clean=t=>t.replace(/[\\/*?:[\]]/g,' ').trim(),key=n=>n.toLowerCase();
+ const safe=n=>{n=n.replace(/^['\s]+|['\s]+$/g,'')||'Blatt';return key(n)==='history'?`${n}_`:n;};
  return (title,widths,suffix='',limit=28)=>{
-  let name=clean(title).slice(0,limit)||'Blatt';
-  if(used.has(name)&&suffix){const tail=clean(suffix).slice(0,18);name=`${clean(title).slice(0,Math.max(8,29-tail.length))}… ${tail}`.slice(0,31);}
-  while(used.has(name))name=name.slice(0,26)+'_'+used.size;
-  used.add(name);const ws=book.addWorksheet(name);ws.columns=widths.map(width=>({width}));return ws;
+  let name=safe(clean(title).slice(0,limit));
+  if(used.has(key(name))&&suffix){const tail=clean(suffix).slice(0,18);name=safe(`${clean(title).slice(0,Math.max(8,29-tail.length))}… ${tail}`.slice(0,31));}
+  for(let n=2,base=name;used.has(key(name));n++)name=safe(base.slice(0,26))+'_'+n;
+  used.add(key(name));const ws=book.addWorksheet(name);ws.columns=widths.map(width=>({width}));return ws;
  };
 }
 const WIDTHS=[46,12,12,16,16,16,14,18,36,14,14,14,14,16];

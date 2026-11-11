@@ -1,8 +1,8 @@
-import {emptyState,validate,withEvent,withoutEvent,withoutBatch,withRecord,withoutRecord,withYear,withYearRules,withPrice,withVapUnit,withVatRate,withClosing,closingPartners,closedThrough,today,firstWorkday,uid,lastSelectableYear,lastBookedYear,APP_VERSION} from './core/model.mjs';
+import {emptyState,validate,withEvent,withoutEvent,withoutBatch,withRecord,withoutRecord,withRelation,withYear,withYearRules,withPrice,withVapUnit,withVatRate,withClosing,closingPartners,closedThrough,today,firstWorkday,uid,lastSelectableYear,lastBookedYear,APP_VERSION} from './core/model.mjs';
 import {replay} from './core/ledger.mjs';
 import {fxReplay} from './core/fx.mjs';
 import {demoState} from './core/sample.mjs';
-import {newSession,seal,open,rekey,load,save,checkPassword,listVaults,getMeta,setMeta,remove,parseEnvelope,fileConflict,fileAccess,filePermission,readFile as readVaultFile,writeFile as writeVaultFile} from './core/vault.mjs';
+import {newSession,seal,open,rekey,load,save,checkPassword,listVaults,getMeta,setMeta,remove,parseEnvelope,openBest,openWithSession,standOf,sameStand,fileChanged,fileRelation,fileAccess,filePermission,readFile as readVaultFile,writeFile as writeVaultFile} from './core/vault.mjs';
 import {createSaver} from './ui/saver.mjs';
 import {esc,decimalInput,inputValue,field} from './ui/format.mjs';
 import {sheetHTML} from './ui/sheet.mjs';
@@ -17,7 +17,7 @@ import {taxPageHTML} from './ui/taxpage.mjs';
 import {pricesHTML,yearEndOf,yearStartOf,PRICE_YEARS} from './ui/prices.mjs';
 import {giftsHTML} from './ui/gifts.mjs';
 import {masterHTML} from './ui/master.mjs';
-import {lockHTML,vaultPageHTML} from './ui/vaultui.mjs';
+import {lockHTML,vaultPageHTML,fileConflictHTML} from './ui/vaultui.mjs';
 import {workbook,accountsWorkbook} from './ui/xlsx.mjs';
 import {FIRST_TAX_YEAR} from './core/rules.mjs';
 import {D,S,div} from './core/decimal.mjs';
@@ -66,21 +66,41 @@ function commit(next,message=''){
  if(!demo)persist();
 }
 // Gespeichert wird je Änderung über einen eigenen Auftrag (ui/saver.mjs). Mit verbundener Datei
-// prüft Depotklar vorher, ob sie anderswo neuer geworden ist, und schreibt sie danach.
+// prüft Depotklar vorher, ob sie anderswo geändert wurde, und schreibt sie danach.
+const CONFLICT_SAVE='Die Datei hat einen anderen Stand als dieser Browser. Bis auf der Seite „Tresor“ entschieden ist, welcher Stand gilt, wird nur im Browser gespeichert.';
 const saver=createSaver({seal,save,getSession:()=>session,setSession:s=>{session=s;},getVault:()=>vaultId,
  checkFile:async(id,previous)=>{
-  if(!fileLink?.handle||!fileLink.granted)return;let current=null;try{current=await readVaultFile(fileLink.handle);}catch{return;}
-  if(fileConflict(current,previous))throw Error(`Die Datei ${fileLink.name||''} wurde anderswo geändert (Revision ${current.revision}). Tresor sperren und neu öffnen, dann gilt der neuere Stand der Datei.`);
+  // Im Konflikt wird die Datei nicht geschrieben; gespeichert wird dann nur im Browser.
+  if(!fileLink?.handle||!fileLink.granted||fileLink.conflict)return;let current=null;try{current=await readVaultFile(fileLink.handle);}catch{return;}
+  // Die Datei wurde anderswo geändert, während der Tresor offen ist: Die Änderung wird im Browser gespeichert, die Datei
+  // bleibt, wie sie ist, und der Anwender entscheidet, welcher Stand gilt – wie beim Öffnen (persist meldet es).
+  if(fileChanged(current,vaultMeta?.fileSeen||null,previous))fileLink={...fileLink,conflict:'both',fileRevision:current.revision,fresh:true};
  },
  writeFile:async(id,envelope)=>{
   if(!fileLink?.handle)return;
+  if(fileLink.conflict)throw Error(CONFLICT_SAVE);
   if(!fileLink.granted)throw Error('Der Browser hat den Zugriff auf die Datei noch nicht erlaubt – auf der Tresorseite erlauben.');
-  await writeVaultFile(fileLink.handle,envelope);
+  await writeVaultFile(fileLink.handle,envelope);await sawFile(id,envelope);
  }});
+// Kennung, mit der dieser Browser die verbundene Datei zuletzt gelesen oder geschrieben hat. Weicht die Datei später
+// davon ab, wurde sie anderswo geändert – dann überschreibt Depotklar nichts von selbst.
+async function sawFile(id,envelope){
+ const fileSeen=standOf(envelope);await setMeta(id,{fileSeen}).catch(()=>{});
+ if(id===vaultId&&vaultMeta)vaultMeta={...vaultMeta,fileSeen};
+}
+const conflictDialog=()=>modal('Datei und Browser haben verschiedene Stände',`${fileConflictHTML(fileLink,session?.revision)}<p class="hint">Dieselben Schaltflächen stehen auf der Seite „Tresor“ unter „Datei“.</p>`);
+const keptOf=(envelope,reason)=>({envelope,at:new Date().toISOString(),reason});
 function persist(){
  saver.persist(state).then(()=>{
   if(saver.error)toast(saver.error,'error');
   else{savedAt=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});setMeta(vaultId,{savedAt:new Date().toISOString()}).catch(()=>{});}
+  // Eben entdeckt, dass die Datei anderswo geändert wurde: Die Änderung liegt im Browser, jetzt entscheidet der Anwender.
+  // Ein offenes Formular bleibt stehen; dann genügt der Hinweis, die Entscheidung steht auf der Seite „Tresor“.
+  if(fileLink?.fresh&&!saver.error){
+   fileLink={...fileLink,fresh:false};
+   if(modalRoot.innerHTML)toast(`Die Datei ${fileLink.name||''} wurde anderswo geändert. Gespeichert wird jetzt nur im Browser – auf der Seite „Tresor“ entscheiden, welcher Stand gilt.`,'error');else conflictDialog();
+   if(route==='tresor')render();
+  }
   showSaveState();
  });
  showSaveState();
@@ -90,7 +110,7 @@ function saveStateText(){
  if(demo)return ['Demo · wird nicht gespeichert','demo'];
  if(saver.pending)return ['Speichert …','busy'];
  if(saver.error)return ['Nicht gespeichert','error'];
- if(saver.fileError)return ['Im Browser gespeichert · Datei nicht aktuell','warn'];
+ if(saver.fileError||fileLink?.conflict)return ['Im Browser gespeichert · Datei nicht aktuell','warn'];
  return [`Gespeichert${savedAt?' '+savedAt:''}${fileLink?.handle&&fileLink.granted?' · auch in der Datei':''}`,''];
 }
 function showSaveState(){const el=$('#save-state');if(!el)return;const [text,cls]=saveStateText();el.textContent=text;el.className=`save-state${cls?' '+cls:''}`;}
@@ -145,7 +165,8 @@ function page(){
  if(route==='schenkungen')return giftsHTML(state);
  if(route==='stammdaten')return masterHTML(state,{editing});
  if(route==='protokoll')return auditHTML(state,{filter:auditFilter,limit:auditLimit});
- if(route==='tresor')return vaultPageHTML({demo,vault:{name:vaultMeta?.name||'Tresor'},revision:session?.revision,savedAt,backupRevision:vaultMeta?.backupRevision??null,fileAccess:fileAccess(),file:fileLink,error:saver.error,fileError:saver.fileError});
+ if(route==='tresor')return vaultPageHTML({demo,vault:{name:vaultMeta?.name||'Tresor'},revision:session?.revision,savedAt,backupRevision:vaultMeta?.backupRevision??null,fileAccess:fileAccess(),file:fileLink,error:saver.error,fileError:saver.fileError,
+  kept:vaultMeta?.kept?.envelope?{revision:vaultMeta.kept.envelope.revision,reason:vaultMeta.kept.reason,when:new Date(vaultMeta.kept.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}:null});
  if(route==='konten')return accountsHTML(state,{year,from:fromYear,personId,open:openState});
  return sheetHTML(state,{year,from:fromYear,personId,view,securityId,depotId,lots:showLots});
 }
@@ -224,7 +245,7 @@ function startDemo(){state=demoState();demo=true;session=null;year=2026;fromYear
 // Sicherung, wenn sich seit der letzten heruntergeladenen Sicherung etwas geändert hat.
 async function lock({ask=false}={}){
  await saver.flush();
- const fileCurrent=fileLink?.handle&&fileLink.granted&&!saver.fileError;
+ const fileCurrent=fileLink?.handle&&fileLink.granted&&!fileLink.conflict&&!saver.fileError;
  if(ask&&state&&!demo&&session&&!fileCurrent&&session.revision>(vaultMeta?.backupRevision??0)){
   modal('Vor dem Sperren',`<p>Seit der letzten heruntergeladenen Sicherung hat sich der Tresor geändert${vaultMeta?.backupRevision?` (Sicherung: Revision ${vaultMeta.backupRevision}, jetzt ${session.revision})`:''}. Der Stand bleibt in diesem Browser gespeichert; eine Sicherungsdatei schützt zusätzlich, falls Browserdaten gelöscht werden.</p><div class="actions"><button class="button" data-action="lock-now">Ohne Sicherung sperren</button><button class="button primary" data-action="backup-lock">Sicherung herunterladen und sperren</button></div>`);
   return;
@@ -232,7 +253,7 @@ async function lock({ask=false}={}){
  if(ask&&saver.error&&!confirm(`Die letzte Änderung ist nicht gespeichert:\n${saver.error}\n\nTrotzdem sperren? Die Änderung geht dann verloren.`))return;
  // Ohne ausdrückliche Bestätigung geht nichts verloren: den ungespeicherten Stand verschlüsselt aufbewahren.
  if(!ask&&saver.error&&state&&session&&!demo){try{rescue={vaultId,envelope:await seal(state,session),error:saver.error};}catch{}}
- state=null;session=null;demo=false;lockError='';closeModal();clearTimeout(lockTimer);vaultId=null;vaultMeta=null;fileLink=null;lockMode='open';saver.reset();
+ state=null;session=null;pendingImport=null;demo=false;lockError='';closeModal();clearTimeout(lockTimer);vaultId=null;vaultMeta=null;fileLink=null;lockMode='open';saver.reset();
  try{vaults=await listVaults();}catch{}
  render();
 }
@@ -246,19 +267,26 @@ async function downloadBackup(){
  await setMeta(vaultId,{backupRevision:envelope.revision});vaultMeta=await getMeta(vaultId);
  if(route==='tresor')render();
 }
-// Tresordatei oder Sicherung als eigenen Tresor aufnehmen. Gleiches Salz heißt derselbe Tresor
-// (Kopie oder Datei eines anderen Geräts): dann den neueren Stand übernehmen statt doppelt anlegen.
+// Tresordatei oder Sicherung als eigenen Tresor aufnehmen. Gleiches Salz heißt derselbe Tresor (Kopie oder Datei eines
+// anderen Geräts). Ein neuerer Stand ersetzt den im Browser nicht ungeprüft: Er wird vorgemerkt und beim nächsten Öffnen
+// erst mit dem Passwort geöffnet. Lässt er sich nicht öffnen (beschädigt), bleibt der Stand im Browser.
 async function addVault(envelope,{handle=null,name='Tresor'}={}){
  const list=await listVaults(),same=list.find(v=>v.salt&&v.salt===envelope.salt),label=String(name).replace(/\.(depotklar|json)$/i,'')||'Tresor';
  let id;
  if(same){
-  id=same.id;const open=id===vaultId&&state,newer=envelope.revision>same.revision;
-  if(newer&&!open)await save(envelope,same.revision,id);
-  if(handle){await setMeta(id,{handle,fileName:handle.name});if(open){vaultMeta=await getMeta(id);fileLink={handle,name:handle.name,granted:await filePermission(handle).catch(()=>false)};}}
-  toast(newer&&open?'Die Datei ist neuer als der geöffnete Stand – Tresor sperren und neu öffnen.':newer?`„${same.name}“ auf den neueren Stand der Datei gebracht.`:`„${same.name}“ ist schon vorhanden${handle?' und jetzt mit der Datei verbunden':''}.`,newer&&open?'error':'info');
+  id=same.id;const open=id===vaultId&&state,newer=envelope.revision>same.revision,local=await load(id),equal=sameStand(envelope,local);
+  if(newer)await setMeta(id,{incoming:envelope});
+  if(handle){
+   // Abgeglichen ist die Datei nur, wenn sie genau den Stand dieses Browsers trägt; sonst klärt das nächste Öffnen, welcher gilt.
+   await setMeta(id,{handle,fileName:handle.name,fileSeen:equal?standOf(envelope):null});
+   if(open){vaultMeta=await getMeta(id);fileLink={handle,name:handle.name,granted:await filePermission(handle).catch(()=>false),conflict:!newer&&!equal?'both':null,fileRevision:envelope.revision};}
+  }
+  toast(newer&&open?'Die Datei ist neuer als der geöffnete Stand. Tresor sperren und neu öffnen: Depotklar prüft sie dann mit dem Passwort und übernimmt sie.'
+   :newer?`„${same.name}“: Die Datei ist neuer als der Stand in diesem Browser. Beim nächsten Öffnen prüft Depotklar sie mit dem Passwort und übernimmt sie dann.`
+   :`„${same.name}“ ist schon vorhanden${handle?' und jetzt mit der Datei verbunden':''}${envelope.revision<same.revision?` – hier mit neuerem Stand (Revision ${same.revision}, Datei ${envelope.revision}). Um zum älteren Stand der Datei zurückzukehren, den Tresor zuerst aus diesem Browser entfernen und die Datei dann erneut öffnen`:''}.`,newer&&open?'error':'info');
  }else{
   id=uid();await save(envelope,0,id);
-  await setMeta(id,{name:label,createdAt:new Date().toISOString(),backupRevision:envelope.revision,...(handle?{handle,fileName:handle.name}:{})});
+  await setMeta(id,{name:label,createdAt:new Date().toISOString(),backupRevision:envelope.revision,...(handle?{handle,fileName:handle.name,fileSeen:standOf(envelope)}:{})});
   toast(`Tresor „${label}“ hinzugefügt${state?' – zum Öffnen „Tresor wechseln“':''}.`);
  }
  vaults=await listVaults();
@@ -364,14 +392,49 @@ const actions={
   await saver.flush();const envelope=await load(vaultId);await writeVaultFile(handle,envelope);
   // Eine gescheiterte Speicherung gilt erst als erledigt, wenn der aktuelle Stand gespeichert ist.
   const unsaved=saver.error;
-  await setMeta(vaultId,{handle,fileName:handle.name});vaultMeta=await getMeta(vaultId);fileLink={handle,name:handle.name,granted:true};saver.reset();if(unsaved)persist();render();toast(`Mit ${handle.name} verbunden.`);
+  await setMeta(vaultId,{handle,fileName:handle.name,fileSeen:standOf(envelope)});vaultMeta=await getMeta(vaultId);fileLink={handle,name:handle.name,granted:true,conflict:null};saver.reset();if(unsaved)persist();render();toast(`Mit ${handle.name} verbunden.`);
  },
- 'unlink-file':async()=>{const unsaved=saver.error;await setMeta(vaultId,{handle:null,fileName:null});vaultMeta=await getMeta(vaultId);fileLink=null;saver.reset();if(unsaved)persist();render();toast('Verbindung gelöst. Die Datei bleibt erhalten.');},
+ 'unlink-file':async()=>{const unsaved=saver.error;await setMeta(vaultId,{handle:null,fileName:null,fileSeen:null});vaultMeta=await getMeta(vaultId);fileLink=null;saver.reset();if(unsaved)persist();closeModal();render();toast('Verbindung gelöst. Die Datei bleibt erhalten.');},
  'grant-file':async()=>{
   if(!fileLink?.handle)return;fileLink.granted=await filePermission(fileLink.handle,true).catch(()=>false);
-  if(fileLink.granted){await saver.flush();const current=await readVaultFile(fileLink.handle).catch(()=>null),local=await load(vaultId);
-   if(fileConflict(current,local.revision))toast('Die Datei ist neuer als dieser Browser – Tresor sperren und neu öffnen.','error');else{await writeVaultFile(fileLink.handle,local);saver.reset();toast('Datei verbunden und aktualisiert.');}}
+  if(fileLink.granted&&!fileLink.conflict){
+   await saver.flush();const current=await readVaultFile(fileLink.handle).catch(()=>null),local=await load(vaultId),relation=fileRelation({local,file:current,seen:vaultMeta?.fileSeen||null});
+   // Beide geändert: nichts überschreiben, der Anwender entscheidet. Nur die Datei geändert: nach dem Neuöffnen gilt sie.
+   if(relation==='both'){fileLink={...fileLink,conflict:'both',fileRevision:current.revision};conflictDialog();}
+   else if(relation==='fileAhead')toast('Die Datei wurde anderswo geändert – Tresor sperren und neu öffnen: Depotklar prüft dann, welcher Stand gilt.','error');
+   else{if(relation!=='same')await writeVaultFile(fileLink.handle,local);await sawFile(vaultId,local);saver.reset();toast(relation==='same'?'Zugriff erlaubt. Die Datei hat den Stand dieses Browsers.':'Datei verbunden und aktualisiert.');}
+  }
   render();
+ },
+ // Datei und Browser haben verschiedene Stände: ausdrücklich entscheiden, welcher gilt.
+ 'file-take':async()=>{
+  if(!fileLink?.handle||!fileLink.conflict)return;
+  const file=await readVaultFile(fileLink.handle).catch(()=>null);if(!file)return toast('Die Datei lässt sich nicht lesen.','error');
+  if(!confirm(`Den Stand der Datei ${fileLink.name||''} (Revision ${file.revision}) übernehmen?\n\nDie Änderungen dieses Browsers seit dem letzten Abgleich gelten dann nicht mehr. Der jetzige Stand wird aufbewahrt und lässt sich auf der Seite „Tresor“ wiederherstellen.`))return;
+  await saver.flush();const opened=await openWithSession(file,session),local=await load(vaultId);
+  await save(file,local?.revision||0,vaultId);
+  await setMeta(vaultId,{fileSeen:standOf(file),...(local?{kept:keptOf(local,'Stand dieses Browsers, bevor der Stand der verbundenen Datei übernommen wurde')}:{})});
+  state=opened.state;session=opened.session;vaultMeta=await getMeta(vaultId);fileLink={...fileLink,conflict:null};saver.reset();closeModal();render();toast('Stand der Datei übernommen. Der bisherige Stand ist aufbewahrt.');
+ },
+ 'file-overwrite':async()=>{
+  if(!fileLink?.handle||!fileLink.granted||!fileLink.conflict)return;
+  if(!confirm(`Die Datei ${fileLink.name||''} mit dem Stand dieses Browsers überschreiben?\n\nWas anderswo in die Datei gespeichert wurde, geht dabei verloren.`))return;
+  await saver.flush();const unsaved=saver.error,local=await load(vaultId);await writeVaultFile(fileLink.handle,local);await sawFile(vaultId,local);
+  fileLink={...fileLink,conflict:null};saver.reset();if(unsaved)persist();closeModal();render();toast('Datei überschrieben. Sie hat jetzt den Stand dieses Browsers.');
+ },
+ // Aufbewahrter Stand: herunterladen, verwerfen oder mit dem jetzigen tauschen.
+ 'kept-download':()=>{const k=vaultMeta?.kept;if(!k)return;download(`depotklar-${slug(vaultMeta?.name||'tresor').toLowerCase()}-aufbewahrt-revision-${k.envelope.revision}.depotklar`,new Blob([JSON.stringify(k.envelope)],{type:'application/json'}));},
+ 'kept-drop':async()=>{if(!vaultMeta?.kept||!confirm('Den aufbewahrten Stand endgültig verwerfen?'))return;await setMeta(vaultId,{kept:null});vaultMeta=await getMeta(vaultId);render();toast('Verworfen.');},
+ 'kept-restore':async()=>{
+  const k=vaultMeta?.kept;if(!k)return;
+  if(!confirm(`Den aufbewahrten Stand (Revision ${k.envelope.revision}) wiederherstellen?\n\nDer jetzige Stand wird dafür aufbewahrt – der Tausch lässt sich also zurücknehmen.`))return;
+  await saver.flush();if(saver.error)throw Error('Zuerst muss die letzte Änderung gespeichert sein.');
+  const opened=await openWithSession(k.envelope,session),local=await load(vaultId);
+  await save(k.envelope,local?.revision||0,vaultId);
+  await setMeta(vaultId,{kept:local?keptOf(local,'Stand vor dem Wiederherstellen des aufbewahrten Stands'):null});
+  // Eine verbundene Datei bekommt den wiederhergestellten Stand gleich mit, sofern kein Konflikt offen ist.
+  if(fileLink?.handle&&fileLink.granted&&!fileLink.conflict)await writeVaultFile(fileLink.handle,k.envelope).then(()=>sawFile(vaultId,k.envelope)).catch(err=>toast(`Datei nicht aktualisiert: ${err.message}`,'error'));
+  state=opened.state;session=opened.session;vaultMeta=await getMeta(vaultId);saver.reset();render();toast('Aufbewahrter Stand wiederhergestellt. Der vorherige Stand ist aufbewahrt.');
  },
  // Rettung bei einem Konflikt: den Stand im Arbeitsspeicher in eine neue Datei schreiben.
  'save-as-file':async()=>{
@@ -410,8 +473,9 @@ const forms={
  },
  balance:form=>{const f=new FormData(form),v=decimalInput(f.get('balance'));if(v==null)throw Error('Kontostand eintragen.');commit(withRecord(state,'balanceChecks',{id:form.dataset.id||undefined,accountId:form.dataset.account,date:`${year}-12-31`,balance:v,...(String(f.get('note')||'').trim()?{note:String(f.get('note')).trim()}:{})}),'Kontostand gespeichert.');closeModal();},
  ledger:form=>{const f=new FormData(form);commit(withRecord(state,'ledgerChecks',{id:form.dataset.id||undefined,depotId:form.dataset.depot,date:`${year}-12-31`,balance:decimalInput(f.get('balance')),note:String(f.get('note')||'')}),'Saldo gespeichert.');closeModal();},
- relation:form=>{const kind=new FormData(form).get('kind'),next=structuredClone(state);next.relations=next.relations.filter(r=>!(r.donorId===form.dataset.donor&&r.recipientId===form.dataset.recipient));if(kind)next.relations.push({donorId:form.dataset.donor,recipientId:form.dataset.recipient,kind});commit(next,'Verhältnis gespeichert.');},
- 'relation-new':form=>{const f=new FormData(form),d=f.get('donorId'),r=f.get('recipientId');if(d===r)throw Error('Schenker und Empfänger müssen verschieden sein.');const next=structuredClone(state);next.relations=next.relations.filter(x=>!(x.donorId===d&&x.recipientId===r));next.relations.push({donorId:d,recipientId:r,kind:f.get('kind')});commit(next,'Verhältnis angelegt.');},
+ // Verwandtschaft über withRelation: geprüft und mit Eintrag im Protokoll wie jede andere Änderung.
+ relation:form=>{const kind=new FormData(form).get('kind'),next=withRelation(state,form.dataset.donor,form.dataset.recipient,kind||null);if(next!==state)commit(next,kind?'Verhältnis gespeichert.':'Verhältnis aufgehoben.');},
+ 'relation-new':form=>{const f=new FormData(form),next=withRelation(state,f.get('donorId'),f.get('recipientId'),f.get('kind'));if(next!==state)commit(next,'Verhältnis angelegt.');else toast('Dieses Verhältnis besteht schon.');},
  'prior-gift':form=>{const f=new FormData(form),g={donorId:form.dataset.donor,recipientId:form.dataset.recipient,date:f.get('date'),value:decimalInput(f.get('value')),note:String(f.get('note')||'')};const t=decimalInput(f.get('taxPaid'));if(t!=null)g.taxPaid=t;commit(withRecord(state,'priorGifts',g),'Vorerwerb gespeichert.');},
  persons:form=>{const f=new FormData(form);commit(withRecord(state,'persons',{...(state.persons.find(p=>p.id===form.dataset.id)||{}),id:form.dataset.id||undefined,name:String(f.get('name')).trim()}),'Person gespeichert.');editing=null;render();},
  depots:form=>{const f=new FormData(form);commit(withRecord(state,'depots',{id:form.dataset.id||undefined,personId:f.get('personId'),name:String(f.get('name')).trim(),bank:String(f.get('bank')).trim(),account:String(f.get('account')||'').trim(),abroad:f.has('abroad')}),'Depot gespeichert.');editing=null;render();},
@@ -425,22 +489,37 @@ const forms={
  unlock:async form=>{
   busy=true;lockError='';render();
   try{
-   const id=form.dataset.vault||selectedVault,meta=await getMeta(id).catch(()=>null);
-   let envelope=await load(id),link=null,fromFile=false;
-   // Verbundene Datei: Zugriff erfragen (der Klick auf Öffnen erlaubt die Rückfrage) und den neueren Stand nehmen.
+   const id=form.dataset.vault||selectedVault,meta=await getMeta(id).catch(()=>null),local=await load(id);
+   let link=null,file=null;
+   // Verbundene Datei: Zugriff erfragen (der Klick auf Öffnen erlaubt die Rückfrage) und lesen.
    if(meta?.handle){
     const granted=await filePermission(meta.handle,true).catch(()=>false);link={handle:meta.handle,name:meta.fileName,granted};
-    if(granted){const file=await readVaultFile(meta.handle).catch(()=>null);if(file&&(!envelope||file.revision>envelope.revision)){envelope=file;fromFile=true;}}
+    if(granted)file=await readVaultFile(meta.handle).catch(()=>null);
    }
-   if(!envelope)throw Error('Für diesen Tresor ist nichts gespeichert.');
-   const password=new FormData(form).get('password'),opened=await open(envelope,password);
-   if(fromFile){const local=await load(id);await save(envelope,local?.revision||0,id);}
-   state=opened.state;session=opened.session;vaultId=id;selectedVault=id;vaultMeta=meta||{name:'Tresor'};fileLink=link;demo=false;savedAt=null;saver.reset();
+   const incoming=meta?.incoming||null;
+   if(!local&&!file&&!incoming)throw Error('Für diesen Tresor ist nichts gespeichert.');
+   // Welcher Stand gilt, entscheidet openBest: Ein Stand aus einer Datei erst, wenn er sich mit dem Passwort öffnen ließ.
+   const password=new FormData(form).get('password'),opened=await openBest({local,file,incoming,seen:meta?.fileSeen||null,password});
+   const fromFile=opened.source!=='local',patch={};
+   if(fromFile){
+    await save(opened.envelope,local?.revision||0,id);
+    // Trug der Browser eigene Änderungen, bleibt sein bisheriger Stand aufbewahrt (Seite „Tresor“).
+    if(opened.keepLocal)patch.kept=keptOf(local,opened.source==='incoming'?'Stand dieses Browsers, bevor die eingelesene Datei übernommen wurde':'Stand dieses Browsers, bevor der Stand der verbundenen Datei übernommen wurde');
+   }
+   if(incoming)patch.incoming=null;
+   if(file&&sameStand(file,opened.envelope))patch.fileSeen=standOf(file);
+   if(Object.keys(patch).length)await setMeta(id,patch);
+   state=opened.state;session=opened.session;vaultId=id;selectedVault=id;vaultMeta=(await getMeta(id).catch(()=>null))||meta||{name:'Tresor'};demo=false;savedAt=null;saver.reset();
+   fileLink=link?{...link,conflict:opened.conflict,fileRevision:file?.revision??null}:null;
    try{localStorage.setItem(VAULT_KEY,id);}catch{}
    go(location.hash.slice(1)&&ROUTES.some(r=>r[0]===location.hash.slice(1))?location.hash.slice(1):'jahr');touch();
-   if(rescue?.vaultId===id){try{rescueState=(await open(rescue.envelope,password)).state;
-    modal('Nicht gespeicherte Änderung',`<p>Beim Sperren war eine Änderung nicht gespeichert (${esc(rescue.error)}). Depotklar hat diesen Stand verschlüsselt aufbewahrt, solange der Browser offen ist.</p><p>„Übernehmen“ ersetzt den eben geöffneten Stand${fromFile?' aus der Datei':''}. Im Zweifel zuerst als eigene Datei sichern.</p><div class="actions"><button class="button" data-action="rescue-drop">Verwerfen</button><button class="button" data-action="rescue-file">Als Datei sichern</button><button class="button primary" data-action="rescue-take">Übernehmen</button></div>`);}catch{}}
-   if(fromFile)toast('Neuerer Stand aus der Datei übernommen.');
+   let dialog=false;
+   if(rescue?.vaultId===id){try{rescueState=(await open(rescue.envelope,password)).state;dialog=true;
+    modal('Nicht gespeicherte Änderung',`<p>Beim Sperren war eine Änderung nicht gespeichert (${esc(rescue.error)}). Depotklar hat diesen Stand verschlüsselt aufbewahrt, solange der Browser offen ist.</p><p>„Übernehmen“ ersetzt den eben geöffneten Stand${opened.source==='file'?' aus der Datei':''}. Im Zweifel zuerst als eigene Datei sichern.</p><div class="actions"><button class="button" data-action="rescue-drop">Verwerfen</button><button class="button" data-action="rescue-file">Als Datei sichern</button><button class="button primary" data-action="rescue-take">Übernehmen</button></div>`);}catch{}}
+   if(opened.conflict){if(!dialog)conflictDialog();}
+   else if(opened.failed.includes('incoming'))toast('Die eingelesene Datei ließ sich mit diesem Passwort nicht öffnen und wurde nicht übernommen. Geöffnet ist der Stand dieses Browsers.','error');
+   else if(opened.source==='file')toast(opened.keepLocal?'Stand der Datei übernommen. Der bisherige Stand dieses Browsers ist aufbewahrt (Seite „Tresor“).':'Neuerer Stand aus der Datei übernommen.');
+   else if(opened.source==='incoming')toast(opened.keepLocal?'Stand der eingelesenen Datei übernommen. Der bisherige Stand dieses Browsers ist aufbewahrt (Seite „Tresor“).':'Stand der eingelesenen Datei übernommen.');
    else if(link&&!link.granted)toast('Zugriff auf die Datei nicht erlaubt – auf der Tresorseite erlauben.','error');
   }
   catch(err){lockError=err.message;}finally{busy=false;if(!state)render();}
@@ -461,9 +540,11 @@ const forms={
  rekey:async form=>{
   const f=new FormData(form);if(f.get('next')!==f.get('repeat'))throw Error('Die neuen Passwörter stimmen nicht überein.');
   await saver.flush();if(saver.error)throw Error('Zuerst muss die letzte Änderung gespeichert sein.');
-  const current=await load(vaultId),changed=await rekey(current,f.get('current'),f.get('next'));
+  const current=await load(vaultId),linked=fileLink?.handle&&fileLink.granted&&!fileLink.conflict;
+  if(linked){const file=await readVaultFile(fileLink.handle).catch(()=>null);if(fileChanged(file,vaultMeta?.fileSeen||null,current.revision))throw Error('Die verbundene Datei wurde anderswo geändert. Zuerst den Tresor sperren und neu öffnen, dann das Passwort ändern.');}
+  const changed=await rekey(current,f.get('current'),f.get('next'));
   await save(changed.envelope,current.revision,vaultId);session=changed.session;
-  if(fileLink?.handle&&fileLink.granted)await writeVaultFile(fileLink.handle,changed.envelope).catch(err=>toast(`Datei nicht aktualisiert: ${err.message}`,'error'));
+  if(linked)await writeVaultFile(fileLink.handle,changed.envelope).then(()=>sawFile(vaultId,changed.envelope)).catch(err=>toast(`Datei nicht aktualisiert: ${err.message}`,'error'));
   toast('Passwort geändert. Ältere Sicherungsdateien behalten das bisherige Passwort.');form.reset();
  },
  'vault-name':async form=>{

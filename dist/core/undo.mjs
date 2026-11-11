@@ -1,4 +1,4 @@
-import {withEvent,withoutEvent,withEvents,withoutEvents,withBatch,withoutBatch,withRecord,withoutRecord,withPrice,withVapUnit,withVatRate,withYearRules,withYear,withoutYear} from './model.mjs';
+import {withEvent,withoutEvent,withEvents,withoutEvents,withBatch,withoutBatch,withRecord,withoutRecord,withRelation,withPrice,withVapUnit,withVatRate,withYearRules,withYear,withoutYear} from './model.mjs';
 
 // Änderungen aus dem Protokoll zurücknehmen. Jeder Eintrag trägt den Stand vorher (before) und nachher (after);
 // zurückgenommen wird über dieselben Funktionen wie jede Änderung: geprüft, in abgeschlossenen Jahren gesperrt
@@ -57,6 +57,15 @@ export function undoPlan(s,index){
   if(collection==='persons'&&!now)return {ok:false,reason:'Eine gelöschte Person lässt sich nicht wiederherstellen: Ihre Jahresdaten wurden mit gelöscht. Bitte neu anlegen.'};
   if(same(now,a.before))return {ok:false,reason:'Der Eintrag hat schon diesen Stand.'};
   return plan(now?'Auf den Stand vor dieser Änderung zurücksetzen':'Gelöschten Eintrag wiederherstellen',(t,o)=>withRecord(t,collection,a.before,o));
+ }
+
+ // Verwandtschaftsverhältnis: auf die Art davor zurück oder wieder aufheben.
+ if(ref.startsWith('relation:')){
+  const rec=a.before||a.after;if(!rec?.donorId||!rec.recipientId)return {ok:false,reason:'Dieser Eintrag lässt sich nicht automatisch zurücknehmen.'};
+  if(![rec.donorId,rec.recipientId].every(id=>s.persons.some(p=>p.id===id)))return {ok:false,reason:'Eine der beiden Personen gibt es nicht mehr.'};
+  const now=s.relations.find(r=>r.donorId===rec.donorId&&r.recipientId===rec.recipientId)||null;
+  if((now?.kind||null)===(a.before?.kind||null))return {ok:false,reason:'Das Verhältnis hat schon diesen Stand.'};
+  return plan(a.before?'Verwandtschaft davor wiederherstellen':'Verwandtschaft aufheben',t=>withRelation(t,rec.donorId,rec.recipientId,a.before?.kind||null));
  }
 
  if(/^Kurs /.test(a.action)){

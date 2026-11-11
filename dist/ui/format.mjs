@@ -8,7 +8,8 @@ export const euro=(v,fallback='Offen')=>v==null?fallback:nf2.format(Number(v))+'
 export const exact=v=>v==null?'':nfExact.format(Number(v));
 export const pieces=v=>v==null?'—':nfExact.format(Number(v));
 export const unit=v=>v==null?'—':nf4.format(Number(v));
-export const date=d=>d?d.split('-').reverse().join('.'):'—';
+// Maskiert: ein Datum aus einer fremden Tresordatei kann beliebiger Text sein.
+export const date=d=>d?esc(String(d).split('-').reverse().join('.')):'—';
 export const num=(v,cls='')=>`<td class="num${cls?' '+cls:''}${v!=null&&Number(v)<0?' neg':''}" title="${esc(exact(v))}">${money(v)}</td>`;
 export const sign=v=>v==null?'':Number(v)<0?'neg':Number(v)>0?'pos':'';
 export const statusLabel={supported:'Ermittelt',incomplete:'Angaben fehlen',unsupported:'Außerhalb des Modells',none:'Keine Erträge erfasst'};
@@ -20,10 +21,15 @@ export const check=(name,label,checked)=>`<label class="check"><input type="chec
 // Tausenderpunkte. Ohne Komma gilt ein einzelner Punkt vor genau drei Ziffern als
 // Tausenderpunkt („19.000“), sonst als Dezimalpunkt („78.20“, „0.025“). Leer bleibt
 // leer (unbekannt). Formulare werden immer mit Komma vorbelegt, damit der Rückweg eindeutig ist.
+// Devisenkurse prüft die Erfassung zusätzlich gegen den EZB-Referenzkurs: „1.085“ wäre sonst unbemerkt 1085.
 export function decimalInput(value){
  const s=String(value??'').trim().replace(/\s|€/g,'');if(!s)return null;
  const dots=(s.match(/\./g)||[]).length;
- const normalized=s.includes(',')?s.replace(/\./g,'').replace(',','.'):dots>1||/^-?[1-9]\d{0,2}\.\d{3}$/.test(s)?s.replace(/\./g,''):s;
+ // Englische Schreibweise mit beiden Zeichen („1,234.56“): Steht der Punkt hinter dem letzten Komma, ist er der
+ // Dezimaltrenner und die Kommas gliedern Tausender. Alles andere mit Komma vor dem Punkt ist mehrdeutig und wird abgelehnt.
+ const english=s.includes(',')&&s.includes('.')&&s.lastIndexOf('.')>s.lastIndexOf(',');
+ if(english&&!/^-?\d{1,3}(,\d{3})+\.\d+$/.test(s))throw Error(`„${value}“ ist kein gültiger Betrag.`);
+ const normalized=english?s.replace(/,/g,''):s.includes(',')?s.replace(/\./g,'').replace(',','.'):dots>1||/^-?[1-9]\d{0,2}\.\d{3}$/.test(s)?s.replace(/\./g,''):s;
  if(!/^-?\d+(\.\d+)?$/.test(normalized))throw Error(`„${value}“ ist kein gültiger Betrag.`);
  const [whole,frac='']=normalized.replace('-','').split('.');
  if(frac.length>12)throw Error(`„${value}“ hat mehr als 12 Nachkommastellen.`);

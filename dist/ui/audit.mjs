@@ -58,6 +58,7 @@ export function subject(s,a){
  if(a.action==='Jahresdaten bestätigt'||a.action==='Jahresdaten zurückgenommen'){const [p,y]=String(a.ref).split(':');return `${s.persons.find(x=>x.id===p)?.name||'Person'} · ${y}`;}
  if(/^USt-Umrechnungskurs /.test(a.action)){const [,c,m]=String(a.ref).split(':');return `${c} · ${m.slice(5)}/${m.slice(0,4)}`;}
  if(a.action==='Jahresregeln bestätigt'||a.action==='Jahreswerte geändert')return `Jahreswerte ${String(a.ref).split(':')[1]} · alle Personen`;
+ if(String(a.ref).startsWith('relation:')&&r){const person=id=>s.persons.find(p=>p.id===id)?.name||'gelöschte Person';return `${person(r.donorId)} → ${person(r.recipientId)}`;}
  if(r&&r.type&&EVENT_TYPES[r.type]){
   const what=r.type==='transfer'&&TRANSFER_KINDS[r.kind]?TRANSFER_KINDS[r.kind]:r.type==='fx'?`${FX_KINDS[r.kind]||EVENT_TYPES.fx} · ${(s.accounts||[]).find(a=>a.id===r.accountId)?.name||'Konto'}`:EVENT_TYPES[r.type];
   const sec=r.securityId?s.securities.find(x=>x.id===r.securityId)?.name:'';
@@ -105,6 +106,7 @@ export function auditTarget(s,a){
  if(/^(Kurs|Vorabpauschale je Anteil) /.test(a.action)){const [securityId,when]=ref.split(':');return s.securities.some(x=>x.id===securityId)?{kind:'prices',securityId,year:year(when)}:null;}
  if(/^USt-Umrechnungskurs /.test(a.action))return {kind:'vat',year:year(ref.split(':')[2])};
  if(ref.startsWith('rules:'))return {kind:'rules'};
+ if(ref.startsWith('relation:'))return {kind:'gifts'};
  return null;
 }
 

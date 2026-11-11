@@ -38,7 +38,8 @@ Diese Dokumentation erklärt Depotklar 4 anhand des ausgelieferten Programms. Si
 - Zusammenveranlagung, je Jahr wählbar – Erste Schritte, „Steuer“; Rechenlogik, „Jahresrechnung je Person“.
 - Jahre ab 2027: Es gilt das hinterlegte Dauerrecht weiter; nur den Basiszins unter „Kurse“ eintragen – Erste Schritte, „Steuer“; Rechenlogik, „Grundsätze“.
 - Kirchenaustritt oder -eintritt im Jahr: Monat in den Jahresdaten, Kirchensteuer gezwölftelt – Rechenlogik, „Jahresrechnung je Person“.
-- Mehrere Tresore, Tresordatei auf OneDrive oder Netzlaufwerk – Kapitel „Tresor, Sicherung und Datenschutz“.
+- Mehrere Tresore, Tresordatei auf OneDrive oder Netzlaufwerk, Datei und Browser mit verschiedenen Ständen, aufbewahrter Stand – Kapitel „Tresor, Sicherung und Datenschutz“, Abschnitt „Tresordatei“.
+- Zahlen in deutscher oder englischer Schreibweise, Prüfung des Devisenkurses gegen den EZB-Referenzkurs, Hinweis bei auffälligem Datum – Erste Schritte, „Vorgänge im Jahr“.
 
 ## Was Depotklar 4 nicht tut
 

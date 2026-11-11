@@ -33,3 +33,11 @@ export function ecbRate(currency,date){
  if(hit<0||target-t.days[hit]>10)return null;
  return {rate:t.values[hit],date:iso(t.days[hit])};
 }
+
+// Vergleichskurs für die Prüfung einer Eingabe (kein Vorschlag): der Kurs des Tages, nach dem Ende der hinterlegten
+// Reihe ihr letzter Wert. Für die Frage, ob ein Kurs um mehr als das Dreifache danebenliegt, genügt auch ein älterer.
+export function referenceRate(currency,date){
+ const exact=ecbRate(currency,date);if(exact)return exact;
+ const t=tables.get(currency);if(!t||!date||!/^\d{4}-\d{2}-\d{2}$/.test(date)||day(date)<=t.last||!t.days.length)return null;
+ return {rate:t.values.at(-1),date:iso(t.days.at(-1)),last:true};
+}
