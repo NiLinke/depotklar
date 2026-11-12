@@ -1,4 +1,4 @@
-Depotklar 4.23.0 - ausgelieferter Quellcode. Versionsnachweis: https://depotklar.niklaslinke.de/doku/manifest.json
+Depotklar 4.24.0 - ausgelieferter Quellcode. Versionsnachweis: https://depotklar.niklaslinke.de/doku/manifest.json
 
 
 ===== DATEI dist/app.mjs =====
@@ -21,6 +21,7 @@ import {taxPageHTML} from './ui/taxpage.mjs';
 import {pricesHTML,yearEndOf,yearStartOf,PRICE_YEARS} from './ui/prices.mjs';
 import {giftsHTML} from './ui/gifts.mjs';
 import {masterHTML} from './ui/master.mjs';
+import {personMenuHTML,groupOf,tone,initials} from './ui/people.mjs';
 import {lockHTML,vaultPageHTML,fileConflictHTML} from './ui/vaultui.mjs';
 import {workbook,accountsWorkbook} from './ui/xlsx.mjs';
 import {FIRST_TAX_YEAR} from './core/rules.mjs';
@@ -132,7 +133,6 @@ function choosePerson(id){personId=id;try{localStorage.setItem(PERSON_KEY,id);}c
 // Lose im steuerlichen Blatt zeigen oder nicht: je Browser gemerkt, ohne Angabe an.
 const LOTS_KEY='depotklar.lots';
 let showLots=(()=>{try{return localStorage.getItem(LOTS_KEY)!=='0';}catch{return true;}})();
-const initials=name=>name.split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
 // Symbole der Navigation: schlichte Linien, Farbe vom Text.
 const ICONS={
  jahr:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
@@ -145,20 +145,28 @@ const ICONS={
  tresor:'<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'
 };
 const icon=r=>`<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[r]||''}</svg>`;
-// Personenwahl als aufklappbares Menü mit vollem Namen: übersichtlich auch bei vielen Personen.
+// Personenwahl als aufklappbares Menü mit vollem Namen; mit Gruppen nach Gruppen geordnet, bei vielen Personen mit
+// Suchfeld (ui/people.mjs).
 function personSwitcher(){
  if(!state.persons.length)return '';
  const current=route==='steuer'&&!personId?state.persons[0]?.id:personId,p=state.persons.find(x=>x.id===current);
- const item=x=>`<button type="button" role="menuitemradio" aria-checked="${x.id===current}" data-action="person" data-person="${esc(x.id)}" aria-label="${esc(x.name)}" class="${x.id===current?'on':''}"><span class="avatar">${esc(initials(x.name))}</span><span>${esc(x.name)}</span></button>`;
- return `<details class="switcher"><summary aria-label="Person wechseln"><span class="avatar${p?'':' all'}">${p?esc(initials(p.name)):'∑'}</span><span class="who"><small>Person</small><strong>${p?esc(p.name):'Alle Personen'}</strong></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
-  <div class="menu" role="menu">${state.persons.map(item).join('')}${route==='steuer'?'':`<hr><button type="button" role="menuitemradio" aria-checked="${personId===''}" data-action="person" data-person="" aria-label="Alle Personen" class="${personId===''?'on':''}"><span class="avatar all">∑</span><span>Alle Personen</span></button>`}</div></details>`;
+ return `<details class="switcher"><summary aria-label="Person wechseln"><span class="avatar${p?tone(groupOf(state,p)):' all'}">${p?esc(initials(p.name)):'∑'}</span><span class="who"><small>Person</small><strong>${p?esc(p.name):'Alle Personen'}</strong></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+  ${personMenuHTML(state,{current,all:route!=='steuer',allOn:personId===''})}</details>`;
+}
+// Suchfeld über einer Liste (Personenwahl, Tresorwahl): blendet aus, was nicht passt, ohne die Seite neu zu zeichnen.
+function filterList(input){
+ const box=input.closest('[data-searchable]');if(!box)return;
+ const q=input.value.trim().toLocaleLowerCase('de');let hits=0;
+ for(const el of box.querySelectorAll('[data-find]')){const hit=!q||el.dataset.find.includes(q);el.hidden=!hit;if(hit)hits++;}
+ for(const group of box.querySelectorAll('[data-find-group]'))group.hidden=!group.querySelector('[data-find]:not([hidden])');
+ const none=box.querySelector('[data-find-none]');if(none)none.hidden=hits>0;
 }
 function shell(content){
  const title=ROUTES.find(r=>r[0]===route)?.[1],person=state.persons.find(p=>p.id===personId);
  return `<div class="app-shell"><aside class="sidebar"><a class="brand" href="/">depotklar<span>.</span></a>
   ${personSwitcher()}
   <nav class="side-nav" aria-label="Bereiche">${ROUTES.map(([r,l])=>`<button data-route="${r}" aria-label="${l}" class="${route===r?'on':''}" ${route===r?'aria-current="page"':''}>${icon(r)}<span>${l}</span></button>`).join('')}</nav>
-  <div class="side-foot">${(([text,cls])=>`<span id="save-state" class="save-state${cls?' '+cls:''}">${esc(text)}</span>`)(saveStateText())}<a href="/doku/" target="_blank" rel="noopener">Dokumentation</a><span>Depotklar ${APP_VERSION} · Modellrechnung, kein Steuerbescheid</span></div></aside>
+  <div class="side-foot">${!demo&&vaults.length>1?`<span class="vault-name">Tresor: ${esc(vaultMeta?.name||'Tresor')}</span>`:''}${(([text,cls])=>`<span id="save-state" class="save-state${cls?' '+cls:''}">${esc(text)}</span>`)(saveStateText())}<a href="/doku/" target="_blank" rel="noopener">Dokumentation</a><span>Depotklar ${APP_VERSION} · Modellrechnung, kein Steuerbescheid</span></div></aside>
   <div class="main-col">${demo?'<div class="demo-strip">Demo mit erfundenen Personen, Beständen und Kursen. <button class="link" data-action="leave-demo">Eigenen Tresor verwenden</button></div>':''}
   <div class="print-title">Depotklar · ${esc(title)} · ${route==='jahr'&&fromYear<year?`${fromYear}–${year}`:year}${person?' · '+esc(person.name):''}${route==='jahr'&&depotId?' · '+esc(state.depots.find(x=>x.id===depotId)?.name||''):''}${route==='jahr'&&securityId?' · '+esc(state.securities.find(x=>x.id===securityId)?.name||''):''} · Stand ${new Date().toLocaleDateString('de-DE')}</div>
   <main id="view">${content}</main></div></div>`;
@@ -167,7 +175,7 @@ function page(){
  if(route==='steuer')return taxPageHTML(state,{personId,year:shownTaxYear(),years:taxYears()});
  if(route==='kurse')return pricesHTML(state,{vatYear,from:pricesFrom});
  if(route==='schenkungen')return giftsHTML(state);
- if(route==='stammdaten')return masterHTML(state,{editing});
+ if(route==='stammdaten')return masterHTML(state,{editing,open:openState});
  if(route==='protokoll')return auditHTML(state,{filter:auditFilter,limit:auditLimit});
  if(route==='tresor')return vaultPageHTML({demo,vault:{name:vaultMeta?.name||'Tresor'},revision:session?.revision,savedAt,backupRevision:vaultMeta?.backupRevision??null,fileAccess:fileAccess(),file:fileLink,error:saver.error,fileError:saver.fileError,
   kept:vaultMeta?.kept?.envelope?{revision:vaultMeta.kept.envelope.revision,reason:vaultMeta.kept.reason,when:new Date(vaultMeta.kept.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}:null});
@@ -175,7 +183,8 @@ function page(){
  return sheetHTML(state,{year,from:fromYear,personId,view,securityId,depotId,lots:showLots});
 }
 function render(){
- if(!state){root.innerHTML=lockHTML({vaults,selected:selectedVault,mode:lockMode,error:lockError,busy,fileAccess:fileAccess(),secure:secureContext()});return;}
+ // Bei vielen Tresoren bleibt der gewählte in der Liste sichtbar.
+ if(!state){root.innerHTML=lockHTML({vaults,selected:selectedVault,mode:lockMode,error:lockError,busy,fileAccess:fileAccess(),secure:secureContext()});root.querySelector('.vault-list.long .vault-item.on')?.scrollIntoView({block:'nearest'});return;}
  const scroll=window.scrollY;
  if(personId===null||(personId&&!state.persons.some(p=>p.id===personId)))personId=preferredPerson();
  if(depotId&&!state.depots.some(d=>d.id===depotId&&(!personId||d.personId===personId)))depotId='';
@@ -378,7 +387,8 @@ const actions={
  'backup-lock':async()=>{await downloadBackup();closeModal();await lock();},
  'switch-vault':()=>lock({ask:true}),
  'download-backup':downloadBackup,
- 'choose-vault':el=>{selectedVault=el.dataset.vault;lockError='';render();},
+ // Nach der Wahl steht die Eingabe im Passwortfeld – auch nach der Suche mit der Eingabetaste.
+ 'choose-vault':el=>{selectedVault=el.dataset.vault;lockError='';render();root.querySelector('form[data-form="unlock"] input[name="password"]')?.focus();},
  'new-vault':()=>{lockMode='create';lockError='';render();},
  'cancel-create':()=>{lockMode='open';lockError='';render();},
  'delete-vault':async el=>{
@@ -481,7 +491,9 @@ const forms={
  relation:form=>{const kind=new FormData(form).get('kind'),next=withRelation(state,form.dataset.donor,form.dataset.recipient,kind||null);if(next!==state)commit(next,kind?'Verhältnis gespeichert.':'Verhältnis aufgehoben.');},
  'relation-new':form=>{const f=new FormData(form),next=withRelation(state,f.get('donorId'),f.get('recipientId'),f.get('kind'));if(next!==state)commit(next,'Verhältnis angelegt.');else toast('Dieses Verhältnis besteht schon.');},
  'prior-gift':form=>{const f=new FormData(form),g={donorId:form.dataset.donor,recipientId:form.dataset.recipient,date:f.get('date'),value:decimalInput(f.get('value')),note:String(f.get('note')||'')};const t=decimalInput(f.get('taxPaid'));if(t!=null)g.taxPaid=t;commit(withRecord(state,'priorGifts',g),'Vorerwerb gespeichert.');},
- persons:form=>{const f=new FormData(form);commit(withRecord(state,'persons',{...(state.persons.find(p=>p.id===form.dataset.id)||{}),id:form.dataset.id||undefined,name:String(f.get('name')).trim()}),'Person gespeichert.');editing=null;render();},
+ // Die Gruppe ist freiwillig; „keine“ entfernt die Zuordnung.
+ persons:form=>{const f=new FormData(form),{groupId:_,...was}=state.persons.find(p=>p.id===form.dataset.id)||{},groupId=f.get('groupId');commit(withRecord(state,'persons',{...was,id:form.dataset.id||undefined,name:String(f.get('name')).trim(),...(groupId?{groupId}:{})}),'Person gespeichert.');editing=null;render();},
+ personGroups:form=>{const f=new FormData(form);commit(withRecord(state,'personGroups',{id:form.dataset.id||undefined,name:String(f.get('name')).trim(),color:f.get('color')}),'Gruppe gespeichert.');editing=null;render();},
  depots:form=>{const f=new FormData(form);commit(withRecord(state,'depots',{id:form.dataset.id||undefined,personId:f.get('personId'),name:String(f.get('name')).trim(),bank:String(f.get('bank')).trim(),account:String(f.get('account')||'').trim(),abroad:f.has('abroad')}),'Depot gespeichert.');editing=null;render();},
  accounts:form=>{
   const f=new FormData(form),[ownerKind,ref]=String(f.get('owner')||'').split(':');
@@ -569,6 +581,9 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('keydown',ev=>{
  if(ev.key==='Escape'&&modalRoot.innerHTML)closeModal();
+ // Suchfeld: Eingabe wählt den ersten Treffer; Escape schließt die Personenwahl.
+ if(ev.key==='Enter'&&ev.target.matches?.('[data-search]')){ev.preventDefault();ev.target.closest('[data-searchable]')?.querySelector('[data-find]:not([hidden])')?.click();}
+ if(ev.key==='Escape'){const menu=ev.target.closest?.('details.switcher[open]');if(menu){menu.open=false;menu.querySelector('summary')?.focus();}}
  if(ev.key==='Enter'&&ev.target.matches('tr.click'))ev.target.click();
  touch();
 });
@@ -631,12 +646,14 @@ document.addEventListener('change',ev=>{
  }
 });
 document.addEventListener('input',ev=>{
+ if(ev.target.matches?.('[data-search]')){filterList(ev.target);return;}
  const form=ev.target.closest('form[data-form="entry"]');if(!form)return;
  clearTimeout(previewTimer);previewTimer=setTimeout(()=>{const d={...draft,...readDraft(form)};draft=d;const box=modalRoot.querySelector('#entry-preview');if(box)box.innerHTML=previewHTML(state,d);},250);
 });
 for(const type of ['mousedown','touchstart','scroll'])document.addEventListener(type,touch,{passive:true});
 // Auf- und Zuklappen merken (das Ereignis steigt nicht auf, daher in der Erfassungsphase).
-document.addEventListener('toggle',ev=>{const d=ev.target;if(d instanceof HTMLDetailsElement&&d.dataset.keep)openState.set(d.dataset.keep,d.open);},true);
+// Die Personenwahl mit Suchfeld beginnt beim Aufklappen im Suchfeld – nur mit Maus, damit auf dem Tablett nicht sofort die Tastatur aufgeht.
+document.addEventListener('toggle',ev=>{const d=ev.target;if(!(d instanceof HTMLDetailsElement))return;if(d.dataset.keep)openState.set(d.dataset.keep,d.open);if(d.open&&d.matches('.switcher')&&matchMedia('(pointer:fine)').matches)d.querySelector('[data-search]')?.focus();},true);
 // Zurück-Taste und Lesezeichen: die Sprungmarke bestimmt die Seite.
 // Offene oder gescheiterte Speicherung: der Browser fragt vor dem Schließen nach.
 window.addEventListener('beforeunload',ev=>{if(saver.pending||saver.error||rescue){ev.preventDefault();ev.returnValue='';}});
@@ -1406,7 +1423,7 @@ import {D,S,mul,div,round,sum} from './decimal.mjs';
 import {KINDS,GROUPS,RELATIONS,EXEMPTION,TREATY_RATE,SUBSTITUTE_RATE,groupOf,baseRateOf,LAST_RULE_YEAR,LAST_RATE_YEAR,FIRST_TAX_YEAR,isFund} from './rules.mjs';
 import {publishedVatRate} from './vatrates.mjs';
 
-export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.23.0';
+export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.24.0';
 
 export const EVENT_TYPES=Object.freeze({
  opening:'Bestand übernommen',
@@ -1429,7 +1446,9 @@ export const ALLOCATIONS=Object.freeze({sequence:'Nacheinander (Reihenfolge der 
 // Währungskonten: verzinst nach § 20 EStG, unverzinst bzw. Zahlungsverkehr nach § 23 EStG.
 export const ACCOUNT_KINDS=Object.freeze({payment:'Unverzinst / Zahlungsverkehr (§ 23 EStG)',interest:'Verzinst, Tages- oder Festgeld (§ 20 EStG)'});
 export const FX_KINDS=Object.freeze({exchangeIn:'Umtausch aus EUR',exchangeOut:'Umtausch in EUR',exchange:'Umtausch in andere Währung',credit:'Gutschrift',debit:'Zahlung / Gebühr / Überweisung',transfer:'Übertrag auf eigenes Konto',gift:'Schenkung an andere Person',inheritance:'Erbschaft an andere Person',opening:'Bestand übernommen'});
-export const COLLECTIONS=Object.freeze({persons:'Person',depots:'Depot',securities:'Wertpapier',accounts:'Währungskonto',certificates:'Bankbescheinigung',ledgerChecks:'Buchhaltungsabgleich',balanceChecks:'Kontostand laut Bank',priorGifts:'Vorerwerb'});
+// Farben einer Gruppe. Gespeichert wird die Kennung; wie sie aussieht, bestimmt die Oberfläche.
+export const PERSON_COLORS=Object.freeze(['blue','green','teal','violet','red','orange','gold','gray']);
+export const COLLECTIONS=Object.freeze({persons:'Person',personGroups:'Gruppe',depots:'Depot',securities:'Wertpapier',accounts:'Währungskonto',certificates:'Bankbescheinigung',ledgerChecks:'Buchhaltungsabgleich',balanceChecks:'Kontostand laut Bank',priorGifts:'Vorerwerb'});
 export const CHURCH_RATES=Object.freeze({'0':'keine','0.08':'8 %','0.09':'9 %'});
 // Steuerabzug laut Abrechnung je Steuerart, wie in der Jahressteuerbescheinigung. Ältere
 // Einträge tragen nur die Summe (withheld); sie bleiben gültig.
@@ -1508,7 +1527,7 @@ export function accountHolder(s,a){
 }
 
 export function emptyState(){
- return {format:FORMAT,version:VERSION,persons:[],years:{},relations:[],depots:[],accounts:[],securities:[],prices:[],events:[],certificates:[],ledgerChecks:[],balanceChecks:[],priorGifts:[],vapUnits:[],audit:[]};
+ return {format:FORMAT,version:VERSION,persons:[],personGroups:[],years:{},relations:[],depots:[],accounts:[],securities:[],prices:[],events:[],certificates:[],ledgerChecks:[],balanceChecks:[],priorGifts:[],vapUnits:[],audit:[]};
 }
 // Daten aus Depotklar 4.0 kennen noch keine Währungskonten; bis 4.1.1 galt ein
 // Jahresabschluss für alle Personen gemeinsam und wird je Person übernommen.
@@ -1517,6 +1536,7 @@ export function upgrade(s){
  if(s.accounts==null)s.accounts=[];
  if(s.vapUnits==null)s.vapUnits=[];
  if(s.balanceChecks==null)s.balanceChecks=[];
+ if(s.personGroups==null)s.personGroups=[];
  if(s.closedThrough!=null){s.closing=Object.fromEntries((s.persons||[]).map(p=>[p.id,s.closedThrough]));delete s.closedThrough;}
  return s;
 }
@@ -1542,6 +1562,16 @@ export function validate(s){
  const persons=unique(s.persons,'Person'),depots=unique(s.depots,'Depot'),securities=unique(s.securities,'Wertpapier');
  unique(s.events,'Vorgang');unique(s.certificates,'Bankbescheinigung');unique(s.ledgerChecks,'Buchhaltungsabgleich');unique(s.priorGifts,'Vorerwerb');
  for(const p of s.persons)if(!p.name?.trim())fail('Person ohne Namen.');
+ // Gruppen ordnen viele Personen, etwa nach Haushalt oder Familienzweig. Sie sind freiwillig, jede Person gehört zu
+ // höchstens einer; auf Bestände, Geld und Steuerwerte haben sie keinen Einfluss.
+ const groupList=s.personGroups??[];if(!Array.isArray(groupList))fail('Datenbereich personGroups ungültig.');
+ const groups=unique(groupList,'Gruppe'),groupNames=new Set();
+ for(const g of groupList){
+  const name=typeof g.name==='string'?g.name.trim():'';if(!name||name.length>40)fail('Gruppe: Name mit höchstens 40 Zeichen angeben.');
+  const key=name.toLocaleLowerCase('de');if(groupNames.has(key))fail(`Gruppe ${name}: Den Namen gibt es schon.`);groupNames.add(key);
+  if(!PERSON_COLORS.includes(g.color))fail(`Gruppe ${name}: unbekannte Farbe.`);
+ }
+ for(const p of s.persons)if(p.groupId!=null&&!groups.has(p.groupId))fail(`${p.name}: Die Gruppe gibt es nicht.`);
  for(const d of s.depots){if(!persons.has(d.personId))fail(`Depot ${d.name||d.id}: Person fehlt.`);if(!d.name?.trim())fail('Depot ohne Bezeichnung.');if(d.abroad!=null&&typeof d.abroad!=='boolean')fail(`Depot ${d.name}: Angabe zur ausländischen Bank ungültig.`);}
  unique(s.accounts,'Währungskonto');
  for(const a of s.accounts){
@@ -1854,7 +1884,7 @@ export function withoutEvents(s,ids,{reason='',importId=null}={}){
  validate(next);return next;
 }
 export function withRecord(s,collection,record,{reason=''}={}){
- const next=structuredClone(s);if(collection==='balanceChecks')next.balanceChecks??=[];
+ const next=structuredClone(s);if(collection==='balanceChecks')next.balanceChecks??=[];if(collection==='personGroups')next.personGroups??=[];
  const list=next[collection];if(!Array.isArray(list))fail('Unbekannter Datenbereich.');
  const r={...structuredClone(record),id:record.id||uid()},before=list.find(x=>x.id===r.id)||null;
  assertRecordOpen(s,collection,before,r);
@@ -1876,6 +1906,7 @@ export function withRecord(s,collection,record,{reason=''}={}){
 }
 export function withoutRecord(s,collection,id){
  const next=structuredClone(s);
+ if(collection==='personGroups'){next.personGroups??=[];if(next.persons.some(p=>p.groupId===id))fail('Gruppe hat noch Personen. Zuerst bei diesen Personen eine andere oder keine Gruppe wählen.');}
  if(collection==='persons'&&(next.depots.some(d=>d.personId===id)))fail('Person hat noch Depots.');
  if(collection==='persons'&&next.accounts.some(a=>!a.depotId&&a.personId===id))fail('Person hat noch Währungskonten.');
  if(collection==='persons'){
@@ -3439,6 +3470,7 @@ export function accountsHTML(s,{year,from=year,personId='',open=null}){
 
 ===== DATEI dist/ui/audit.mjs =====
 import {EVENT_TYPES,TRANSFER_KINDS,ALLOCATIONS,COLLECTIONS,CHURCH_RATES,FX_KINDS,ACCOUNT_KINDS} from '../core/model.mjs';
+import {COLOR_NAMES} from './people.mjs';
 import {KINDS,GROUPS,RELATIONS} from '../core/rules.mjs';
 import {undoPlan} from '../core/undo.mjs';
 import {esc,date,money,pieces} from './format.mjs';
@@ -3451,7 +3483,7 @@ const OLD_COLLECTIONS=Object.fromEntries(Object.keys(COLLECTIONS).map(k=>[k,k]))
 const LABELS={toAmount:'Betrag in der Zielwährung',allowance:'Sparer-Pauschbetrag',baseRate:'Basiszins',cash:'Barausgleich',toQuantity:'Neue Stückzahl',label:'Bezeichnung',jointWith:'Zusammen veranlagt mit',date:'Datum',depotId:'Depot',toDepotId:'Zieldepot',securityId:'Wertpapier',toSecurityId:'Zielfonds',quantity:'Stück',amount:'Betrag',withheld:'Steuerabzug',foreignTax:'Quellensteuer',
  cost:'Anschaffungswert',group:'Erworben',acquired:'Erwerbsdatum',price2017:'Kurs 31.12.2017',deemed2017:'Fiktiver Gewinn 2017',oldIncome:'Akkumulierte Erträge',vapBefore:'Bisherige Vorabpauschalen',
  price:'Kurs',kind:'Art',accountId:'Währungskonto',toAccountId:'Zielkonto',eur:'Gegenwert EUR',rate:'Devisenkurs',fx:'Über Währungskonto',currency:'Währung',ratio:'Verhältnis',year:'Jahr',note:'Notiz',share:'Anteil',allocation:'Lose zuteilen',batchId:'Gemeinsame Schenkung',unitPrice:'Kurs je Stück',fees:'Gebühren',rateSource:'Kursquelle',rateDate:'Kurstag',
- name:'Name',isin:'ISIN',bank:'Bank',account:'Buchhaltungskonto',personId:'Person',balance:'Saldo',value:'Wert',taxPaid:'Gezahlte Steuer',donorId:'Schenker',recipientId:'Empfänger',
+ name:'Name',groupId:'Gruppe',color:'Farbe',isin:'ISIN',bank:'Bank',account:'Buchhaltungskonto',personId:'Person',balance:'Saldo',value:'Wert',taxPaid:'Gezahlte Steuer',donorId:'Schenker',recipientId:'Empfänger',
  capitalTax:'Kapitalertragsteuer',solidarity:'Solidaritätszuschlag',churchTax:'Kirchensteuer',lossCertificate:'Verlustbescheinigung',certifiedStockLoss:'Bescheinigter Aktienverlust',certifiedOtherLoss:'Bescheinigter sonstiger Verlust',
  churchRate:'Kirchensteuer',externalAllowance:'Sparer-Pauschbetrag anderweitig',stockLossCarry:'Aktienverlustvortrag',otherLossCarry:'Sonstiger Verlustvortrag',protectedRemaining:'Rest-Freibetrag Alt-Anteile',joint:'Zusammenveranlagung',nonResident:'Nicht unbeschränkt steuerpflichtig'};
 const AMOUNTS=new Set(['amount','fees','withheld','foreignTax','cost','deemed2017','oldIncome','vapBefore','balance','value','taxPaid','capitalTax','solidarity','churchTax','certifiedStockLoss','certifiedOtherLoss','externalAllowance','stockLossCarry','otherLossCarry','protectedRemaining']);
@@ -3467,6 +3499,8 @@ function valueText(s,key,v){
  if(key==='accountId'||key==='toAccountId')return (s.accounts||[]).find(a=>a.id===v)?.name||'gelöschtes Konto';
  if(key==='fx'&&typeof v==='object'){const a=(s.accounts||[]).find(x=>x.id===v.accountId);return `${pieces(v.amount)} ${a?.currency||''} über ${a?.name||'Konto'}${v.rate?` zu ${v.rate}`:''}`;}
  if(key==='jointWith')return s.persons.find(p=>p.id===v)?.name||String(v);
+ if(key==='groupId')return (s.personGroups||[]).find(g=>g.id===v)?.name||'gelöschte Gruppe';
+ if(key==='color')return COLOR_NAMES[v]||String(v);
  if(key==='kind')return TRANSFER_KINDS[v]||FX_KINDS[v]||ACCOUNT_KINDS[v]||KINDS[v]||RELATIONS[v]?.label||String(v);
  if(key==='group')return GROUPS[v]||String(v);
  if(key==='allocation')return ALLOCATIONS[v]||String(v);
@@ -3536,7 +3570,7 @@ export function auditTarget(s,a){
  const collection=a.collection||(/^(persons|depots|accounts|securities|certificates|ledgerChecks|balanceChecks|priorGifts) /.exec(a.action)?.[1]);
  if(collection){
   const now=(s[collection]||[]).find(x=>x.id===a.ref);if(!now)return null;
-  if(['persons','depots','accounts','securities'].includes(collection))return {kind:'record',collection,id:now.id};
+  if(['persons','personGroups','depots','accounts','securities'].includes(collection))return {kind:'record',collection,id:now.id};
   if(collection==='certificates')return {kind:'tax',personId:now.personId,year:now.year};
   if(collection==='ledgerChecks')return {kind:'ledger',depotId:now.depotId,year:year(now.date)};
   if(collection==='balanceChecks')return {kind:'balance',accountId:now.accountId,year:year(now.date)};
@@ -4370,6 +4404,10 @@ export const statusLabel={supported:'Ermittelt',incomplete:'Angaben fehlen',unsu
 export const statusBadge=status=>`<span class="badge ${esc(status)}">${esc(statusLabel[status]||status)}</span>`;
 export const field=(name,label,value='',attrs='',hint='')=>`<label class="field"><span>${esc(label)}</span><input name="${esc(name)}" value="${esc(value??'')}" ${attrs}>${hint?`<small>${hint}</small>`:''}</label>`;
 export const select=(name,label,options,value,attrs='')=>`<label class="field"><span>${esc(label)}</span><select name="${esc(name)}" ${attrs}>${options.map(([v,l])=>`<option value="${esc(v)}" ${String(v)===String(value??'')?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
+// Suchfeld über einer Liste (Personenwahl, Tresorwahl): Jeder Eintrag trägt seinen Suchtext klein geschrieben in
+// data-find; die Anwendung blendet beim Tippen aus, was nicht passt.
+export const findText=(...parts)=>parts.filter(Boolean).join(' ').toLocaleLowerCase('de');
+export const searchField=label=>`<input type="search" class="list-search" data-search placeholder="${esc(label)}" aria-label="${esc(label)}" autocomplete="off" spellcheck="false">`;
 export const check=(name,label,checked)=>`<label class="check"><input type="checkbox" name="${esc(name)}" ${checked?'checked':''}><span>${esc(label)}</span></label>`;
 // Dezimaleingabe, deutsch zuerst: Komma ist Dezimaltrenner, Punkte sind dann
 // Tausenderpunkte. Ohne Komma gilt ein einzelner Punkt vor genau drei Ziffern als
@@ -4754,16 +4792,23 @@ export function interestBlock(r,currency,period,{open=null,key=''}={}){
 import {KINDS} from '../core/rules.mjs';
 import {ACCOUNT_KINDS,kindWarning} from '../core/model.mjs';
 import {esc,field,select,check} from './format.mjs';
+import {byGroup,tone,nextColor,COLOR_OPTIONS} from './people.mjs';
 
 // Stammdaten: Personen, Depots, Wertpapiere. Ein Eintrag mit Vorgängen lässt
-// sich ändern, aber nicht löschen.
-export function masterHTML(s,{editing=null}={}){
+// sich ändern, aber nicht löschen. open: aufgeklappte Blöcke (bleiben nach dem Speichern, wie sie waren).
+export function masterHTML(s,{editing=null,open=null}={}){
  const edit=(collection)=>editing?.collection===collection?s[collection].find(x=>x.id===editing.id)||{}:{};
  const buttons=(collection,id)=>`<button class="link" data-action="edit-record" data-collection="${collection}" data-id="${esc(id)}">ändern</button> <button class="link danger" data-action="delete-record" data-collection="${collection}" data-id="${esc(id)}">löschen</button>`;
  const form=(collection,record,inner,label)=>`<form data-form="${collection}" ${record.id?`data-id="${esc(record.id)}"`:''}><div class="grid">${inner}</div><div class="actions">${record.id?'<button type="button" class="button" data-action="cancel-edit">Abbrechen</button>':'<span></span>'}<button class="button primary">${record.id?'Änderung speichern':label}</button></div></form>`;
- const p=edit('persons'),d=edit('depots'),x=edit('securities'),a=edit('accounts');
- const persons=`<section class="card"><h2>Personen</h2><table class="list"><tbody>${s.persons.map(q=>`<tr><td>${esc(q.name)}</td><td class="num">${s.depots.filter(z=>z.personId===q.id).length} Depots</td><td class="num">${buttons('persons',q.id)}</td></tr>`).join('')||'<tr><td class="muted">Noch keine Personen.</td></tr>'}</tbody></table>
-  ${form('persons',p,field('name','Name',p.name,'required maxlength="80"'),'Person anlegen')}</section>`;
+ const p=edit('persons'),d=edit('depots'),x=edit('securities'),a=edit('accounts'),g=edit('personGroups');
+ // Personen: ohne Gruppen die einfache Liste wie bisher; mit Gruppen je Gruppe eine Zeile mit Farbpunkt, darunter ihre Personen.
+ const groups=s.personGroups||[];
+ const personRow=(q,group)=>`<tr><td>${groups.length?`<span class="dot${tone(group)}"></span>`:''}${esc(q.name)}</td><td class="num">${s.depots.filter(z=>z.personId===q.id).length} Depots</td><td class="num">${buttons('persons',q.id)}</td></tr>`;
+ const groupRow=y=>y.group?`<tr class="group-row"><th colspan="2"><span class="dot${tone(y.group)}"></span>${esc(y.group.name)}<span class="count">${y.persons.length} ${y.persons.length===1?'Person':'Personen'}</span></th><td class="num">${buttons('personGroups',y.group.id)}</td></tr>`:'<tr class="group-row"><th colspan="3"><span class="dot"></span>Ohne Gruppe</th></tr>';
+ const personRows=groups.length?byGroup(s,{empty:true}).map(y=>groupRow(y)+y.persons.map(q=>personRow(q,y.group)).join('')).join(''):s.persons.map(q=>personRow(q,null)).join('');
+ const groupForm=`<details class="fold" data-keep="gruppen"${g.id||open?.get('gruppen')?' open':''}><summary><h3>Gruppen</h3><small>freiwillig – ordnet viele Personen, zum Beispiel nach Haushalt</small></summary>${form('personGroups',g,`${field('name','Name der Gruppe',g.name,'required maxlength="40"')}${select('color','Farbe',COLOR_OPTIONS,g.color||nextColor(s))}`,'Gruppe anlegen')}</details>`;
+ const persons=`<section class="card"><h2>Personen</h2><table class="list"><tbody>${personRows||'<tr><td class="muted">Noch keine Personen.</td></tr>'}</tbody></table>
+  ${form('persons',p,`${field('name','Name',p.name,'required maxlength="80"')}${groups.length?select('groupId','Gruppe',[['','– keine –'],...groups.map(q=>[q.id,q.name])],p.groupId||''):''}`,'Person anlegen')}${groupForm}</section>`;
  const depots=`<section class="card"><h2>Depots</h2><table class="list"><tbody>${s.depots.map(q=>`<tr><td>${esc(q.name)}<small>${esc(s.persons.find(z=>z.id===q.personId)?.name)} · ${esc(q.bank)}${q.abroad?' · ausländisch':''}${q.account?' · Konto '+esc(q.account):''}</small></td><td class="num">${s.events.filter(e=>e.depotId===q.id).length} Vorgänge</td><td class="num">${buttons('depots',q.id)}</td></tr>`).join('')||'<tr><td class="muted">Noch keine Depots.</td></tr>'}</tbody></table>
   ${s.persons.length?form('depots',d,`${select('personId','Inhaber',s.persons.map(q=>[q.id,q.name]),d.personId)}${field('name','Bezeichnung',d.name,'required maxlength="80"')}${field('bank','Bank',d.bank,'required maxlength="80"')}${field('account','Sachkonto der Buchhaltung',d.account,'maxlength="20"','Zum Beispiel 530 – für den Abgleich im Jahresblatt.')}${check('abroad','Ausländische Bank – kein deutscher Steuerabzug',d.abroad)}`,'Depot anlegen'):'<p class="muted">Zuerst eine Person anlegen.</p>'}</section>`;
  const warn=q=>{const w=kindWarning(q);return w?`<small class="warn">${esc(w)}</small>`:'';};
@@ -4971,6 +5016,44 @@ export function auditPdf(s,{filter=''}={},{jsPDF,autoTable}){
  const y=heading(doc,M,'Protokoll',[filter?'Auswahl wie am Bildschirm':'Alle Änderungen, neueste zuerst']);
  renderBlocks(doc,autoTable,blocksFromRows(auditRows(s,{filter})),{y,M});
  return footer(doc,M);
+}
+
+
+===== DATEI dist/ui/people.mjs =====
+import {PERSON_COLORS} from '../core/model.mjs';
+import {esc,findText,searchField} from './format.mjs';
+
+// Viele Personen ordnen: Gruppen mit Farbe und eine Auswahl mit Suchfeld. Gruppen sind freiwillig – ohne Gruppen und
+// mit wenigen Personen sieht die Auswahl aus wie bisher. Auf die Rechnung haben Gruppen keinen Einfluss.
+export const COLOR_NAMES={blue:'Blau',green:'Grün',teal:'Türkis',violet:'Violett',red:'Rot',orange:'Orange',gold:'Gold',gray:'Grau'};
+export const COLOR_OPTIONS=PERSON_COLORS.map(c=>[c,COLOR_NAMES[c]]);
+// Ab so vielen Einträgen bekommt eine Auswahl ein Suchfeld.
+export const SEARCH_FROM=8;
+
+export const initials=name=>String(name||'').split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+export const groupOf=(s,person)=>(s.personGroups||[]).find(g=>g.id===person?.groupId)||null;
+// Farbklasse für den Kreis mit den Initialen und den Farbpunkt: die der Gruppe, ohne Gruppe die bisherige Farbe.
+export const tone=group=>group&&PERSON_COLORS.includes(group.color)?` c-${group.color}`:'';
+// Vorschlag für eine neue Gruppe: die erste Farbe, die noch keine Gruppe trägt.
+export const nextColor=s=>{const used=new Set((s.personGroups||[]).map(g=>g.color));return PERSON_COLORS.find(c=>!used.has(c))||PERSON_COLORS[(s.personGroups||[]).length%PERSON_COLORS.length];};
+
+// Personen je Gruppe, in der Reihenfolge der Gruppen; danach die ohne Gruppe (group: null).
+// empty: auch Gruppen ohne Personen nennen – für die Stammdaten, wo sie angelegt und gelöscht werden.
+export function byGroup(s,{empty=false}={}){
+ const groups=s.personGroups||[],known=new Set(groups.map(g=>g.id));
+ const out=groups.map(group=>({group,persons:s.persons.filter(p=>p.groupId===group.id)})).filter(x=>empty||x.persons.length);
+ const rest=s.persons.filter(p=>!known.has(p.groupId));
+ if(rest.length)out.push({group:null,persons:rest});
+ return out;
+}
+
+// Einträge der Personenwahl: nach Gruppen mit Überschrift, sobald es Gruppen gibt; ab SEARCH_FROM Personen mit Suchfeld.
+// Gesucht wird in Name und Gruppe. current: gewählte Person; all: „Alle Personen“ anbieten; allOn: „Alle Personen“ ist gewählt.
+export function personMenuHTML(s,{current='',all=true,allOn=false}={}){
+ const sections=byGroup(s),grouped=(s.personGroups||[]).length>0,search=s.persons.length>=SEARCH_FROM;
+ const item=(p,group)=>`<button type="button" role="menuitemradio" aria-checked="${p.id===current}" data-action="person" data-person="${esc(p.id)}" data-find="${esc(findText(p.name,group?.name))}" aria-label="${esc(p.name)}" class="${p.id===current?'on':''}"><span class="avatar${tone(group)}">${esc(initials(p.name))}</span><span>${esc(p.name)}</span></button>`;
+ const section=x=>`<div class="menu-group" role="group" data-find-group${grouped?` aria-label="${esc(x.group?.name||'Ohne Gruppe')}"`:''}>${grouped?`<div class="menu-head"><span class="dot${tone(x.group)}"></span>${esc(x.group?.name||'Ohne Gruppe')}</div>`:''}${x.persons.map(p=>item(p,x.group)).join('')}</div>`;
+ return `<div class="menu" role="menu" data-searchable>${search?searchField('Person oder Gruppe suchen'):''}${sections.map(section).join('')}${search?'<p class="menu-none" data-find-none hidden>Keine Treffer.</p>':''}${all?`<hr><button type="button" role="menuitemradio" aria-checked="${allOn}" data-action="person" data-person="" aria-label="Alle Personen" class="${allOn?'on':''}"><span class="avatar all">∑</span><span>Alle Personen</span></button>`:''}</div>`;
 }
 
 
@@ -5437,12 +5520,14 @@ export function taxPageHTML(s,{personId,year,years=taxYears(s)}){
 
 
 ===== DATEI dist/ui/vaultui.mjs =====
-import {esc,field} from './format.mjs';
+import {esc,field,findText,searchField} from './format.mjs';
 import {APP_VERSION} from '../core/model.mjs';
 
 const fileInput=(label,cls)=>`<label class="${cls} file">${label}<input type="file" accept=".depotklar,.json,application/json" data-action="import-backup" hidden></label>`;
 const backupNote=v=>(v.pending?'eingelesene Datei wird beim Öffnen geprüft · ':'')+(v.linked?`Datei: ${esc(v.fileName||'verbunden')}`:v.backupRevision?`Sicherung Revision ${v.backupRevision}${v.backupRevision<v.revision?', seither geändert':''}`:'keine Sicherung vermerkt');
 
+// Ab so vielen Tresoren bekommt die Auswahl ein Suchfeld und eine begrenzte Höhe.
+export const VAULT_SEARCH_FROM=6;
 // Sperrbildschirm: Tresor wählen und öffnen, neuen Tresor anlegen oder eine Tresordatei öffnen.
 // Ohne sicheren Kontext (HTTPS oder localhost) stellt der Browser keine Verschlüsselung (Web Crypto) bereit: dann lässt
 // sich kein Tresor anlegen oder öffnen. Statt eines unverständlichen Fehlers ein klarer Hinweis; die Demo geht weiter.
@@ -5453,7 +5538,8 @@ export function lockHTML({vaults=[],selected=null,mode='open',error='',busy=fals
  const err=error?`<p class="error">${esc(error)}</p>`:'';
  const current=vaults.find(v=>v.id===selected)||vaults[0]||null,creating=mode==='create'||!current;
  const create=`<form data-form="create">${field('name','Name des Tresors',current?'':'Familie','required maxlength="60"','Zum Beispiel „Familie“. Der Name steht unverschlüsselt in diesem Browser.')}${field('password','Neues Tresorpasswort','','type="password" autocomplete="new-password" minlength="12" required','Mindestens 12 Zeichen. Ohne Passwort gibt es keinen Zugang – auch nicht für den Betreiber.')}${field('repeat','Passwort wiederholen','','type="password" autocomplete="new-password" minlength="12" required')}${err}<button class="button primary wide" ${busy?'disabled':''}>${busy?'Lege an …':'Tresor anlegen'}</button>${current?'<button type="button" class="link" data-action="cancel-create">Abbrechen</button>':''}</form>`;
- const open=current?`${vaults.length>1?`<div class="vault-list" role="radiogroup" aria-label="Tresor">${vaults.map(v=>`<button type="button" role="radio" aria-checked="${v.id===current.id}" class="vault-item${v.id===current.id?' on':''}" data-action="choose-vault" data-vault="${esc(v.id)}"><strong>${esc(v.name)}</strong><small>${backupNote(v)}</small></button>`).join('')}</div>`:''}
+ const many=vaults.length>=VAULT_SEARCH_FROM;
+ const open=current?`${vaults.length>1?`<div class="vault-pick" data-searchable>${many?searchField('Tresor suchen'):''}<div class="vault-list${many?' long':''}" role="radiogroup" aria-label="Tresor">${vaults.map(v=>`<button type="button" role="radio" aria-checked="${v.id===current.id}" class="vault-item${v.id===current.id?' on':''}" data-action="choose-vault" data-vault="${esc(v.id)}" data-find="${esc(findText(v.name,v.fileName))}"><strong>${esc(v.name)}</strong><small>${backupNote(v)}</small></button>`).join('')}</div>${many?'<p class="menu-none" data-find-none hidden>Kein Tresor mit diesem Namen.</p>':''}</div>`:''}
   <form data-form="unlock" data-vault="${esc(current.id)}">${field('password',vaults.length>1?`Passwort für „${current.name}“`:'Tresorpasswort','','type="password" autocomplete="current-password" required autofocus')}${err}<button class="button primary wide" ${busy?'disabled':''}>${busy?'Öffne …':'Tresor öffnen'}</button></form>
   <p class="muted small">${vaults.length>1?'':`${esc(current.name)} · ${backupNote(current)} · `}<button class="link" data-action="delete-vault" data-vault="${esc(current.id)}">Aus diesem Browser entfernen</button></p>`:'';
  const links=[current&&!creating?'<button class="link" data-action="new-vault">Neuen Tresor anlegen</button>':'',fileAccess?'<button class="link" data-action="open-file">Tresordatei öffnen</button>':fileInput('Tresordatei einlesen','link'),'<button class="link" data-action="demo">Demo mit Beispieldaten ansehen</button>'].filter(Boolean).join('');

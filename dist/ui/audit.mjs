@@ -1,4 +1,5 @@
 import {EVENT_TYPES,TRANSFER_KINDS,ALLOCATIONS,COLLECTIONS,CHURCH_RATES,FX_KINDS,ACCOUNT_KINDS} from '../core/model.mjs';
+import {COLOR_NAMES} from './people.mjs';
 import {KINDS,GROUPS,RELATIONS} from '../core/rules.mjs';
 import {undoPlan} from '../core/undo.mjs';
 import {esc,date,money,pieces} from './format.mjs';
@@ -11,7 +12,7 @@ const OLD_COLLECTIONS=Object.fromEntries(Object.keys(COLLECTIONS).map(k=>[k,k]))
 const LABELS={toAmount:'Betrag in der Zielwährung',allowance:'Sparer-Pauschbetrag',baseRate:'Basiszins',cash:'Barausgleich',toQuantity:'Neue Stückzahl',label:'Bezeichnung',jointWith:'Zusammen veranlagt mit',date:'Datum',depotId:'Depot',toDepotId:'Zieldepot',securityId:'Wertpapier',toSecurityId:'Zielfonds',quantity:'Stück',amount:'Betrag',withheld:'Steuerabzug',foreignTax:'Quellensteuer',
  cost:'Anschaffungswert',group:'Erworben',acquired:'Erwerbsdatum',price2017:'Kurs 31.12.2017',deemed2017:'Fiktiver Gewinn 2017',oldIncome:'Akkumulierte Erträge',vapBefore:'Bisherige Vorabpauschalen',
  price:'Kurs',kind:'Art',accountId:'Währungskonto',toAccountId:'Zielkonto',eur:'Gegenwert EUR',rate:'Devisenkurs',fx:'Über Währungskonto',currency:'Währung',ratio:'Verhältnis',year:'Jahr',note:'Notiz',share:'Anteil',allocation:'Lose zuteilen',batchId:'Gemeinsame Schenkung',unitPrice:'Kurs je Stück',fees:'Gebühren',rateSource:'Kursquelle',rateDate:'Kurstag',
- name:'Name',isin:'ISIN',bank:'Bank',account:'Buchhaltungskonto',personId:'Person',balance:'Saldo',value:'Wert',taxPaid:'Gezahlte Steuer',donorId:'Schenker',recipientId:'Empfänger',
+ name:'Name',groupId:'Gruppe',color:'Farbe',isin:'ISIN',bank:'Bank',account:'Buchhaltungskonto',personId:'Person',balance:'Saldo',value:'Wert',taxPaid:'Gezahlte Steuer',donorId:'Schenker',recipientId:'Empfänger',
  capitalTax:'Kapitalertragsteuer',solidarity:'Solidaritätszuschlag',churchTax:'Kirchensteuer',lossCertificate:'Verlustbescheinigung',certifiedStockLoss:'Bescheinigter Aktienverlust',certifiedOtherLoss:'Bescheinigter sonstiger Verlust',
  churchRate:'Kirchensteuer',externalAllowance:'Sparer-Pauschbetrag anderweitig',stockLossCarry:'Aktienverlustvortrag',otherLossCarry:'Sonstiger Verlustvortrag',protectedRemaining:'Rest-Freibetrag Alt-Anteile',joint:'Zusammenveranlagung',nonResident:'Nicht unbeschränkt steuerpflichtig'};
 const AMOUNTS=new Set(['amount','fees','withheld','foreignTax','cost','deemed2017','oldIncome','vapBefore','balance','value','taxPaid','capitalTax','solidarity','churchTax','certifiedStockLoss','certifiedOtherLoss','externalAllowance','stockLossCarry','otherLossCarry','protectedRemaining']);
@@ -27,6 +28,8 @@ function valueText(s,key,v){
  if(key==='accountId'||key==='toAccountId')return (s.accounts||[]).find(a=>a.id===v)?.name||'gelöschtes Konto';
  if(key==='fx'&&typeof v==='object'){const a=(s.accounts||[]).find(x=>x.id===v.accountId);return `${pieces(v.amount)} ${a?.currency||''} über ${a?.name||'Konto'}${v.rate?` zu ${v.rate}`:''}`;}
  if(key==='jointWith')return s.persons.find(p=>p.id===v)?.name||String(v);
+ if(key==='groupId')return (s.personGroups||[]).find(g=>g.id===v)?.name||'gelöschte Gruppe';
+ if(key==='color')return COLOR_NAMES[v]||String(v);
  if(key==='kind')return TRANSFER_KINDS[v]||FX_KINDS[v]||ACCOUNT_KINDS[v]||KINDS[v]||RELATIONS[v]?.label||String(v);
  if(key==='group')return GROUPS[v]||String(v);
  if(key==='allocation')return ALLOCATIONS[v]||String(v);
@@ -96,7 +99,7 @@ export function auditTarget(s,a){
  const collection=a.collection||(/^(persons|depots|accounts|securities|certificates|ledgerChecks|balanceChecks|priorGifts) /.exec(a.action)?.[1]);
  if(collection){
   const now=(s[collection]||[]).find(x=>x.id===a.ref);if(!now)return null;
-  if(['persons','depots','accounts','securities'].includes(collection))return {kind:'record',collection,id:now.id};
+  if(['persons','personGroups','depots','accounts','securities'].includes(collection))return {kind:'record',collection,id:now.id};
   if(collection==='certificates')return {kind:'tax',personId:now.personId,year:now.year};
   if(collection==='ledgerChecks')return {kind:'ledger',depotId:now.depotId,year:year(now.date)};
   if(collection==='balanceChecks')return {kind:'balance',accountId:now.accountId,year:year(now.date)};

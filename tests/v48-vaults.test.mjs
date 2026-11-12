@@ -78,7 +78,7 @@ test('F21: vault files are recognised, and a newer file elsewhere is never overw
 test('F21: lock screen lists the vaults, offers a new one and opening a file; the vault page shows file and save state',async()=>{
  const vaults=[{id:'a',name:'Familie',revision:12,linked:true,fileName:'familie.depotklar',backupRevision:null},{id:'b',name:'Test',revision:3,linked:false,backupRevision:2}];
  let html=lockHTML({vaults,selected:'b',fileAccess:true});
- assert.match(html,/data-action="choose-vault" data-vault="a"><strong>Familie<\/strong><small>Datei: familie\.depotklar/);assert.match(html,/Sicherung Revision 2, seither geändert/);
+ assert.match(html,/data-action="choose-vault" data-vault="a" data-find="familie familie\.depotklar"><strong>Familie<\/strong><small>Datei: familie\.depotklar/);assert.match(html,/Sicherung Revision 2, seither geändert/);
  assert.match(html,/data-form="unlock" data-vault="b"/);assert.match(html,/Passwort für „Test“/);assert.match(html,/data-action="new-vault"/);assert.match(html,/data-action="open-file"/);
  html=lockHTML({vaults,selected:'a',mode:'create',fileAccess:false});assert.match(html,/data-form="create"/);assert.match(html,/name="name"/);assert.match(html,/data-action="import-backup"/);
  html=vaultPageHTML({vault:{name:'Familie'},revision:12,backupRevision:10,fileAccess:true,file:{handle:{},name:'familie.depotklar',granted:false},fileError:'Datei gesperrt'});

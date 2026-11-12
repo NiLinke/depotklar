@@ -29,6 +29,7 @@ Diese Module bilden die ausgelieferte Anwendung. Rechenkern unter core, Darstell
 - [ui/lots.mjs](/ui/lots.mjs)
 - [ui/master.mjs](/ui/master.mjs)
 - [ui/pdf.mjs](/ui/pdf.mjs)
+- [ui/people.mjs](/ui/people.mjs)
 - [ui/prices.mjs](/ui/prices.mjs)
 - [ui/report.mjs](/ui/report.mjs)
 - [ui/saver.mjs](/ui/saver.mjs)

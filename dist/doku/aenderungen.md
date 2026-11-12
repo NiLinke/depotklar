@@ -1,5 +1,23 @@
 # Änderungen und Dokumentationsstand
 
+## 2026-11-12 - Depotklar 4.24.0: Gruppen für viele Personen, Suche in Personen- und Tresorwahl
+
+Anlass: Ein Tresor soll auch mit sehr vielen Personen übersichtlich bleiben, und ein Browser mit vielen Tresoren – etwa je Familie einer – ebenso.
+
+Verhalten:
+- Gruppen: Unter „Stammdaten“ → „Personen“ → „Gruppen“ lassen sich Gruppen mit Name und Farbe anlegen, zum Beispiel je Haushalt oder Familienzweig. Jede Person gehört zu höchstens einer Gruppe; die Zuordnung steht im Formular der Person. Acht Farben stehen zur Wahl, vorgeschlagen wird die erste noch freie.
+- Stammdaten: Mit Gruppen steht die Personenliste je Gruppe unter einer Zeile mit Farbpunkt, Anzahl und „ändern / löschen“, danach „Ohne Gruppe“. Ohne Gruppen bleibt die Liste, wie sie war; der Block „Gruppen“ ist zugeklappt.
+- Personenwahl: Mit Gruppen sind die Personen je Gruppe geordnet, der Kreis mit den Initialen trägt die Farbe der Gruppe. Ab acht Personen hat die Auswahl ein Suchfeld: Es sucht in Name und Gruppe, die Eingabetaste wählt den ersten Treffer, Escape schließt die Auswahl. Auf schmalen Fenstern klappt die Auswahl jetzt über die Seite auf; bisher schnitt die Kopfleiste sie ab.
+- Tresorwahl: Ab sechs Tresoren hat die Auswahl ein Suchfeld (Name des Tresors oder der verbundenen Datei) und eine begrenzte Höhe. Nach der Wahl eines Tresors steht die Eingabe im Passwortfeld. Sind mehrere Tresore im Browser, steht der Name des geöffneten unten in der Seitenleiste.
+- Protokoll: Anlegen, Ändern und Löschen einer Gruppe und die Zuordnung einer Person stehen im Protokoll, lassen sich von dort öffnen und zurücknehmen.
+- Löschen: Eine Gruppe lässt sich erst löschen, wenn keine Person mehr in ihr ist; die Meldung sagt es.
+
+Auswirkung auf Bestände, Geld und Steuerwerte: Keine. Gruppen ordnen nur die Anzeige; die Rechnung kennt sie nicht. Tresore aus früheren Versionen öffnen unverändert; der neue Datenbereich wird beim Öffnen ergänzt. Depotklar 4.23.0 liest einen Tresor mit Gruppen weiter und lässt Gruppen und Zuordnung unberührt.
+
+Grenzen: Eine Summe je Gruppe gibt es nicht – „Alle Personen“ meint weiter alle. Eine Person gehört zu einer Gruppe, nicht zu mehreren. Die Farben sind eine Hilfe fürs Auge; in Excel und PDF erscheinen Gruppen nicht. Getrennte Familien gehören besser in getrennte Tresore: Die Suche hilft bei der Wahl, zusammengeführt werden Tresore nicht.
+
+Tests: 7 neue feste Prüfungen: Regeln für Gruppen (Name, Farbe, Zuordnung, Löschen), Tresore ohne den neuen Datenbereich, gleiche Lose und gleicher Jahresbericht je Person mit und ohne Gruppen, Protokoll mit Öffnen und Zurücknehmen, Personenwahl mit und ohne Gruppen und Suchfeld, Maskierung von Namen aus dem Tresor, Stammdaten, Tresorwahl. Zusätzlich mit dem Stand 4.23.0 geprüft: Er liest einen Tresor mit Gruppen und behält sie beim Ändern einer Person. Im Browser mit der Maus geprüft: Gruppe anlegen und umfärben, Person zuordnen, Löschen einer Gruppe mit Personen (Meldung), Personenwahl mit Gruppen in schmaler und breiter Ansicht, Suche mit Treffer, ohne Treffer, Eingabetaste und Escape, Rücknahme und „Öffnen“ aus dem Protokoll; Tresorwahl mit sieben Testtresoren: Suche, Eingabetaste, Öffnen, Tresorname in der Seitenleiste; nach der Wahl eines Tresors per Maus steht die Eingabe im Passwortfeld; eine Gruppe im Tresor gespeichert und entschlüsselt wieder gelesen. Weitere Personen der Demo wurden per Skript über dieselben Formulare angelegt und zugeordnet.
+
 ## 2026-11-11 - Depotklar 4.23.0: Ergebnisse der Gesamtprüfung
 
 Anlass: Eine vollständige Prüfung von Rechenkern, Tresor, Import, Oberfläche und Server mit Zufallsdaten (rund 30.000 Wertpapiervorgänge, 7.200 Währungsbewegungen), von Hand gerechneten Fällen und präparierten Dateien. Die Rechnung selbst war in allen Fällen richtig; behoben sind Fehler in Anzeige, Eingabe und im Umgang mit Tresordateien.

@@ -17,6 +17,7 @@ import {taxPageHTML} from './ui/taxpage.mjs';
 import {pricesHTML,yearEndOf,yearStartOf,PRICE_YEARS} from './ui/prices.mjs';
 import {giftsHTML} from './ui/gifts.mjs';
 import {masterHTML} from './ui/master.mjs';
+import {personMenuHTML,groupOf,tone,initials} from './ui/people.mjs';
 import {lockHTML,vaultPageHTML,fileConflictHTML} from './ui/vaultui.mjs';
 import {workbook,accountsWorkbook} from './ui/xlsx.mjs';
 import {FIRST_TAX_YEAR} from './core/rules.mjs';
@@ -128,7 +129,6 @@ function choosePerson(id){personId=id;try{localStorage.setItem(PERSON_KEY,id);}c
 // Lose im steuerlichen Blatt zeigen oder nicht: je Browser gemerkt, ohne Angabe an.
 const LOTS_KEY='depotklar.lots';
 let showLots=(()=>{try{return localStorage.getItem(LOTS_KEY)!=='0';}catch{return true;}})();
-const initials=name=>name.split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase();
 // Symbole der Navigation: schlichte Linien, Farbe vom Text.
 const ICONS={
  jahr:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/>',
@@ -141,20 +141,28 @@ const ICONS={
  tresor:'<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'
 };
 const icon=r=>`<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[r]||''}</svg>`;
-// Personenwahl als aufklappbares Menü mit vollem Namen: übersichtlich auch bei vielen Personen.
+// Personenwahl als aufklappbares Menü mit vollem Namen; mit Gruppen nach Gruppen geordnet, bei vielen Personen mit
+// Suchfeld (ui/people.mjs).
 function personSwitcher(){
  if(!state.persons.length)return '';
  const current=route==='steuer'&&!personId?state.persons[0]?.id:personId,p=state.persons.find(x=>x.id===current);
- const item=x=>`<button type="button" role="menuitemradio" aria-checked="${x.id===current}" data-action="person" data-person="${esc(x.id)}" aria-label="${esc(x.name)}" class="${x.id===current?'on':''}"><span class="avatar">${esc(initials(x.name))}</span><span>${esc(x.name)}</span></button>`;
- return `<details class="switcher"><summary aria-label="Person wechseln"><span class="avatar${p?'':' all'}">${p?esc(initials(p.name)):'∑'}</span><span class="who"><small>Person</small><strong>${p?esc(p.name):'Alle Personen'}</strong></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
-  <div class="menu" role="menu">${state.persons.map(item).join('')}${route==='steuer'?'':`<hr><button type="button" role="menuitemradio" aria-checked="${personId===''}" data-action="person" data-person="" aria-label="Alle Personen" class="${personId===''?'on':''}"><span class="avatar all">∑</span><span>Alle Personen</span></button>`}</div></details>`;
+ return `<details class="switcher"><summary aria-label="Person wechseln"><span class="avatar${p?tone(groupOf(state,p)):' all'}">${p?esc(initials(p.name)):'∑'}</span><span class="who"><small>Person</small><strong>${p?esc(p.name):'Alle Personen'}</strong></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+  ${personMenuHTML(state,{current,all:route!=='steuer',allOn:personId===''})}</details>`;
+}
+// Suchfeld über einer Liste (Personenwahl, Tresorwahl): blendet aus, was nicht passt, ohne die Seite neu zu zeichnen.
+function filterList(input){
+ const box=input.closest('[data-searchable]');if(!box)return;
+ const q=input.value.trim().toLocaleLowerCase('de');let hits=0;
+ for(const el of box.querySelectorAll('[data-find]')){const hit=!q||el.dataset.find.includes(q);el.hidden=!hit;if(hit)hits++;}
+ for(const group of box.querySelectorAll('[data-find-group]'))group.hidden=!group.querySelector('[data-find]:not([hidden])');
+ const none=box.querySelector('[data-find-none]');if(none)none.hidden=hits>0;
 }
 function shell(content){
  const title=ROUTES.find(r=>r[0]===route)?.[1],person=state.persons.find(p=>p.id===personId);
  return `<div class="app-shell"><aside class="sidebar"><a class="brand" href="/">depotklar<span>.</span></a>
   ${personSwitcher()}
   <nav class="side-nav" aria-label="Bereiche">${ROUTES.map(([r,l])=>`<button data-route="${r}" aria-label="${l}" class="${route===r?'on':''}" ${route===r?'aria-current="page"':''}>${icon(r)}<span>${l}</span></button>`).join('')}</nav>
-  <div class="side-foot">${(([text,cls])=>`<span id="save-state" class="save-state${cls?' '+cls:''}">${esc(text)}</span>`)(saveStateText())}<a href="/doku/" target="_blank" rel="noopener">Dokumentation</a><span>Depotklar ${APP_VERSION} · Modellrechnung, kein Steuerbescheid</span></div></aside>
+  <div class="side-foot">${!demo&&vaults.length>1?`<span class="vault-name">Tresor: ${esc(vaultMeta?.name||'Tresor')}</span>`:''}${(([text,cls])=>`<span id="save-state" class="save-state${cls?' '+cls:''}">${esc(text)}</span>`)(saveStateText())}<a href="/doku/" target="_blank" rel="noopener">Dokumentation</a><span>Depotklar ${APP_VERSION} · Modellrechnung, kein Steuerbescheid</span></div></aside>
   <div class="main-col">${demo?'<div class="demo-strip">Demo mit erfundenen Personen, Beständen und Kursen. <button class="link" data-action="leave-demo">Eigenen Tresor verwenden</button></div>':''}
   <div class="print-title">Depotklar · ${esc(title)} · ${route==='jahr'&&fromYear<year?`${fromYear}–${year}`:year}${person?' · '+esc(person.name):''}${route==='jahr'&&depotId?' · '+esc(state.depots.find(x=>x.id===depotId)?.name||''):''}${route==='jahr'&&securityId?' · '+esc(state.securities.find(x=>x.id===securityId)?.name||''):''} · Stand ${new Date().toLocaleDateString('de-DE')}</div>
   <main id="view">${content}</main></div></div>`;
@@ -163,7 +171,7 @@ function page(){
  if(route==='steuer')return taxPageHTML(state,{personId,year:shownTaxYear(),years:taxYears()});
  if(route==='kurse')return pricesHTML(state,{vatYear,from:pricesFrom});
  if(route==='schenkungen')return giftsHTML(state);
- if(route==='stammdaten')return masterHTML(state,{editing});
+ if(route==='stammdaten')return masterHTML(state,{editing,open:openState});
  if(route==='protokoll')return auditHTML(state,{filter:auditFilter,limit:auditLimit});
  if(route==='tresor')return vaultPageHTML({demo,vault:{name:vaultMeta?.name||'Tresor'},revision:session?.revision,savedAt,backupRevision:vaultMeta?.backupRevision??null,fileAccess:fileAccess(),file:fileLink,error:saver.error,fileError:saver.fileError,
   kept:vaultMeta?.kept?.envelope?{revision:vaultMeta.kept.envelope.revision,reason:vaultMeta.kept.reason,when:new Date(vaultMeta.kept.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}:null});
@@ -171,7 +179,8 @@ function page(){
  return sheetHTML(state,{year,from:fromYear,personId,view,securityId,depotId,lots:showLots});
 }
 function render(){
- if(!state){root.innerHTML=lockHTML({vaults,selected:selectedVault,mode:lockMode,error:lockError,busy,fileAccess:fileAccess(),secure:secureContext()});return;}
+ // Bei vielen Tresoren bleibt der gewählte in der Liste sichtbar.
+ if(!state){root.innerHTML=lockHTML({vaults,selected:selectedVault,mode:lockMode,error:lockError,busy,fileAccess:fileAccess(),secure:secureContext()});root.querySelector('.vault-list.long .vault-item.on')?.scrollIntoView({block:'nearest'});return;}
  const scroll=window.scrollY;
  if(personId===null||(personId&&!state.persons.some(p=>p.id===personId)))personId=preferredPerson();
  if(depotId&&!state.depots.some(d=>d.id===depotId&&(!personId||d.personId===personId)))depotId='';
@@ -374,7 +383,8 @@ const actions={
  'backup-lock':async()=>{await downloadBackup();closeModal();await lock();},
  'switch-vault':()=>lock({ask:true}),
  'download-backup':downloadBackup,
- 'choose-vault':el=>{selectedVault=el.dataset.vault;lockError='';render();},
+ // Nach der Wahl steht die Eingabe im Passwortfeld – auch nach der Suche mit der Eingabetaste.
+ 'choose-vault':el=>{selectedVault=el.dataset.vault;lockError='';render();root.querySelector('form[data-form="unlock"] input[name="password"]')?.focus();},
  'new-vault':()=>{lockMode='create';lockError='';render();},
  'cancel-create':()=>{lockMode='open';lockError='';render();},
  'delete-vault':async el=>{
@@ -477,7 +487,9 @@ const forms={
  relation:form=>{const kind=new FormData(form).get('kind'),next=withRelation(state,form.dataset.donor,form.dataset.recipient,kind||null);if(next!==state)commit(next,kind?'Verhältnis gespeichert.':'Verhältnis aufgehoben.');},
  'relation-new':form=>{const f=new FormData(form),next=withRelation(state,f.get('donorId'),f.get('recipientId'),f.get('kind'));if(next!==state)commit(next,'Verhältnis angelegt.');else toast('Dieses Verhältnis besteht schon.');},
  'prior-gift':form=>{const f=new FormData(form),g={donorId:form.dataset.donor,recipientId:form.dataset.recipient,date:f.get('date'),value:decimalInput(f.get('value')),note:String(f.get('note')||'')};const t=decimalInput(f.get('taxPaid'));if(t!=null)g.taxPaid=t;commit(withRecord(state,'priorGifts',g),'Vorerwerb gespeichert.');},
- persons:form=>{const f=new FormData(form);commit(withRecord(state,'persons',{...(state.persons.find(p=>p.id===form.dataset.id)||{}),id:form.dataset.id||undefined,name:String(f.get('name')).trim()}),'Person gespeichert.');editing=null;render();},
+ // Die Gruppe ist freiwillig; „keine“ entfernt die Zuordnung.
+ persons:form=>{const f=new FormData(form),{groupId:_,...was}=state.persons.find(p=>p.id===form.dataset.id)||{},groupId=f.get('groupId');commit(withRecord(state,'persons',{...was,id:form.dataset.id||undefined,name:String(f.get('name')).trim(),...(groupId?{groupId}:{})}),'Person gespeichert.');editing=null;render();},
+ personGroups:form=>{const f=new FormData(form);commit(withRecord(state,'personGroups',{id:form.dataset.id||undefined,name:String(f.get('name')).trim(),color:f.get('color')}),'Gruppe gespeichert.');editing=null;render();},
  depots:form=>{const f=new FormData(form);commit(withRecord(state,'depots',{id:form.dataset.id||undefined,personId:f.get('personId'),name:String(f.get('name')).trim(),bank:String(f.get('bank')).trim(),account:String(f.get('account')||'').trim(),abroad:f.has('abroad')}),'Depot gespeichert.');editing=null;render();},
  accounts:form=>{
   const f=new FormData(form),[ownerKind,ref]=String(f.get('owner')||'').split(':');
@@ -565,6 +577,9 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('keydown',ev=>{
  if(ev.key==='Escape'&&modalRoot.innerHTML)closeModal();
+ // Suchfeld: Eingabe wählt den ersten Treffer; Escape schließt die Personenwahl.
+ if(ev.key==='Enter'&&ev.target.matches?.('[data-search]')){ev.preventDefault();ev.target.closest('[data-searchable]')?.querySelector('[data-find]:not([hidden])')?.click();}
+ if(ev.key==='Escape'){const menu=ev.target.closest?.('details.switcher[open]');if(menu){menu.open=false;menu.querySelector('summary')?.focus();}}
  if(ev.key==='Enter'&&ev.target.matches('tr.click'))ev.target.click();
  touch();
 });
@@ -627,12 +642,14 @@ document.addEventListener('change',ev=>{
  }
 });
 document.addEventListener('input',ev=>{
+ if(ev.target.matches?.('[data-search]')){filterList(ev.target);return;}
  const form=ev.target.closest('form[data-form="entry"]');if(!form)return;
  clearTimeout(previewTimer);previewTimer=setTimeout(()=>{const d={...draft,...readDraft(form)};draft=d;const box=modalRoot.querySelector('#entry-preview');if(box)box.innerHTML=previewHTML(state,d);},250);
 });
 for(const type of ['mousedown','touchstart','scroll'])document.addEventListener(type,touch,{passive:true});
 // Auf- und Zuklappen merken (das Ereignis steigt nicht auf, daher in der Erfassungsphase).
-document.addEventListener('toggle',ev=>{const d=ev.target;if(d instanceof HTMLDetailsElement&&d.dataset.keep)openState.set(d.dataset.keep,d.open);},true);
+// Die Personenwahl mit Suchfeld beginnt beim Aufklappen im Suchfeld – nur mit Maus, damit auf dem Tablett nicht sofort die Tastatur aufgeht.
+document.addEventListener('toggle',ev=>{const d=ev.target;if(!(d instanceof HTMLDetailsElement))return;if(d.dataset.keep)openState.set(d.dataset.keep,d.open);if(d.open&&d.matches('.switcher')&&matchMedia('(pointer:fine)').matches)d.querySelector('[data-search]')?.focus();},true);
 // Zurück-Taste und Lesezeichen: die Sprungmarke bestimmt die Seite.
 // Offene oder gescheiterte Speicherung: der Browser fragt vor dem Schließen nach.
 window.addEventListener('beforeunload',ev=>{if(saver.pending||saver.error||rescue){ev.preventDefault();ev.returnValue='';}});

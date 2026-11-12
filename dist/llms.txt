@@ -1,6 +1,6 @@
 # Depotklar - Handbuch
 
-Version 4.23.0; Regelpaket DE-privat-2018-2026.15; Datenformat 4; Stand 2026-11-11.
+Version 4.24.0; Regelpaket DE-privat-2018-2026.15; Datenformat 4; Stand 2026-11-12.
 
 Zuerst https://depotklar.niklaslinke.de/doku/ki-start.md lesen. Keine persönlichen Finanzdaten verfügbar. Fehlend ist nicht Null. Das Modell ist enger als das deutsche Steuerrecht.
 

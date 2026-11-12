@@ -1,16 +1,23 @@
 import {KINDS} from '../core/rules.mjs';
 import {ACCOUNT_KINDS,kindWarning} from '../core/model.mjs';
 import {esc,field,select,check} from './format.mjs';
+import {byGroup,tone,nextColor,COLOR_OPTIONS} from './people.mjs';
 
 // Stammdaten: Personen, Depots, Wertpapiere. Ein Eintrag mit Vorgängen lässt
-// sich ändern, aber nicht löschen.
-export function masterHTML(s,{editing=null}={}){
+// sich ändern, aber nicht löschen. open: aufgeklappte Blöcke (bleiben nach dem Speichern, wie sie waren).
+export function masterHTML(s,{editing=null,open=null}={}){
  const edit=(collection)=>editing?.collection===collection?s[collection].find(x=>x.id===editing.id)||{}:{};
  const buttons=(collection,id)=>`<button class="link" data-action="edit-record" data-collection="${collection}" data-id="${esc(id)}">ändern</button> <button class="link danger" data-action="delete-record" data-collection="${collection}" data-id="${esc(id)}">löschen</button>`;
  const form=(collection,record,inner,label)=>`<form data-form="${collection}" ${record.id?`data-id="${esc(record.id)}"`:''}><div class="grid">${inner}</div><div class="actions">${record.id?'<button type="button" class="button" data-action="cancel-edit">Abbrechen</button>':'<span></span>'}<button class="button primary">${record.id?'Änderung speichern':label}</button></div></form>`;
- const p=edit('persons'),d=edit('depots'),x=edit('securities'),a=edit('accounts');
- const persons=`<section class="card"><h2>Personen</h2><table class="list"><tbody>${s.persons.map(q=>`<tr><td>${esc(q.name)}</td><td class="num">${s.depots.filter(z=>z.personId===q.id).length} Depots</td><td class="num">${buttons('persons',q.id)}</td></tr>`).join('')||'<tr><td class="muted">Noch keine Personen.</td></tr>'}</tbody></table>
-  ${form('persons',p,field('name','Name',p.name,'required maxlength="80"'),'Person anlegen')}</section>`;
+ const p=edit('persons'),d=edit('depots'),x=edit('securities'),a=edit('accounts'),g=edit('personGroups');
+ // Personen: ohne Gruppen die einfache Liste wie bisher; mit Gruppen je Gruppe eine Zeile mit Farbpunkt, darunter ihre Personen.
+ const groups=s.personGroups||[];
+ const personRow=(q,group)=>`<tr><td>${groups.length?`<span class="dot${tone(group)}"></span>`:''}${esc(q.name)}</td><td class="num">${s.depots.filter(z=>z.personId===q.id).length} Depots</td><td class="num">${buttons('persons',q.id)}</td></tr>`;
+ const groupRow=y=>y.group?`<tr class="group-row"><th colspan="2"><span class="dot${tone(y.group)}"></span>${esc(y.group.name)}<span class="count">${y.persons.length} ${y.persons.length===1?'Person':'Personen'}</span></th><td class="num">${buttons('personGroups',y.group.id)}</td></tr>`:'<tr class="group-row"><th colspan="3"><span class="dot"></span>Ohne Gruppe</th></tr>';
+ const personRows=groups.length?byGroup(s,{empty:true}).map(y=>groupRow(y)+y.persons.map(q=>personRow(q,y.group)).join('')).join(''):s.persons.map(q=>personRow(q,null)).join('');
+ const groupForm=`<details class="fold" data-keep="gruppen"${g.id||open?.get('gruppen')?' open':''}><summary><h3>Gruppen</h3><small>freiwillig – ordnet viele Personen, zum Beispiel nach Haushalt</small></summary>${form('personGroups',g,`${field('name','Name der Gruppe',g.name,'required maxlength="40"')}${select('color','Farbe',COLOR_OPTIONS,g.color||nextColor(s))}`,'Gruppe anlegen')}</details>`;
+ const persons=`<section class="card"><h2>Personen</h2><table class="list"><tbody>${personRows||'<tr><td class="muted">Noch keine Personen.</td></tr>'}</tbody></table>
+  ${form('persons',p,`${field('name','Name',p.name,'required maxlength="80"')}${groups.length?select('groupId','Gruppe',[['','– keine –'],...groups.map(q=>[q.id,q.name])],p.groupId||''):''}`,'Person anlegen')}${groupForm}</section>`;
  const depots=`<section class="card"><h2>Depots</h2><table class="list"><tbody>${s.depots.map(q=>`<tr><td>${esc(q.name)}<small>${esc(s.persons.find(z=>z.id===q.personId)?.name)} · ${esc(q.bank)}${q.abroad?' · ausländisch':''}${q.account?' · Konto '+esc(q.account):''}</small></td><td class="num">${s.events.filter(e=>e.depotId===q.id).length} Vorgänge</td><td class="num">${buttons('depots',q.id)}</td></tr>`).join('')||'<tr><td class="muted">Noch keine Depots.</td></tr>'}</tbody></table>
   ${s.persons.length?form('depots',d,`${select('personId','Inhaber',s.persons.map(q=>[q.id,q.name]),d.personId)}${field('name','Bezeichnung',d.name,'required maxlength="80"')}${field('bank','Bank',d.bank,'required maxlength="80"')}${field('account','Sachkonto der Buchhaltung',d.account,'maxlength="20"','Zum Beispiel 530 – für den Abgleich im Jahresblatt.')}${check('abroad','Ausländische Bank – kein deutscher Steuerabzug',d.abroad)}`,'Depot anlegen'):'<p class="muted">Zuerst eine Person anlegen.</p>'}</section>`;
  const warn=q=>{const w=kindWarning(q);return w?`<small class="warn">${esc(w)}</small>`:'';};

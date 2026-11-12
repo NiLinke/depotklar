@@ -2,7 +2,7 @@ import {D,S,mul,div,round,sum} from './decimal.mjs';
 import {KINDS,GROUPS,RELATIONS,EXEMPTION,TREATY_RATE,SUBSTITUTE_RATE,groupOf,baseRateOf,LAST_RULE_YEAR,LAST_RATE_YEAR,FIRST_TAX_YEAR,isFund} from './rules.mjs';
 import {publishedVatRate} from './vatrates.mjs';
 
-export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.23.0';
+export const FORMAT='depotklar',VERSION=4,APP_VERSION='4.24.0';
 
 export const EVENT_TYPES=Object.freeze({
  opening:'Bestand übernommen',
@@ -25,7 +25,9 @@ export const ALLOCATIONS=Object.freeze({sequence:'Nacheinander (Reihenfolge der 
 // Währungskonten: verzinst nach § 20 EStG, unverzinst bzw. Zahlungsverkehr nach § 23 EStG.
 export const ACCOUNT_KINDS=Object.freeze({payment:'Unverzinst / Zahlungsverkehr (§ 23 EStG)',interest:'Verzinst, Tages- oder Festgeld (§ 20 EStG)'});
 export const FX_KINDS=Object.freeze({exchangeIn:'Umtausch aus EUR',exchangeOut:'Umtausch in EUR',exchange:'Umtausch in andere Währung',credit:'Gutschrift',debit:'Zahlung / Gebühr / Überweisung',transfer:'Übertrag auf eigenes Konto',gift:'Schenkung an andere Person',inheritance:'Erbschaft an andere Person',opening:'Bestand übernommen'});
-export const COLLECTIONS=Object.freeze({persons:'Person',depots:'Depot',securities:'Wertpapier',accounts:'Währungskonto',certificates:'Bankbescheinigung',ledgerChecks:'Buchhaltungsabgleich',balanceChecks:'Kontostand laut Bank',priorGifts:'Vorerwerb'});
+// Farben einer Gruppe. Gespeichert wird die Kennung; wie sie aussieht, bestimmt die Oberfläche.
+export const PERSON_COLORS=Object.freeze(['blue','green','teal','violet','red','orange','gold','gray']);
+export const COLLECTIONS=Object.freeze({persons:'Person',personGroups:'Gruppe',depots:'Depot',securities:'Wertpapier',accounts:'Währungskonto',certificates:'Bankbescheinigung',ledgerChecks:'Buchhaltungsabgleich',balanceChecks:'Kontostand laut Bank',priorGifts:'Vorerwerb'});
 export const CHURCH_RATES=Object.freeze({'0':'keine','0.08':'8 %','0.09':'9 %'});
 // Steuerabzug laut Abrechnung je Steuerart, wie in der Jahressteuerbescheinigung. Ältere
 // Einträge tragen nur die Summe (withheld); sie bleiben gültig.
@@ -104,7 +106,7 @@ export function accountHolder(s,a){
 }
 
 export function emptyState(){
- return {format:FORMAT,version:VERSION,persons:[],years:{},relations:[],depots:[],accounts:[],securities:[],prices:[],events:[],certificates:[],ledgerChecks:[],balanceChecks:[],priorGifts:[],vapUnits:[],audit:[]};
+ return {format:FORMAT,version:VERSION,persons:[],personGroups:[],years:{},relations:[],depots:[],accounts:[],securities:[],prices:[],events:[],certificates:[],ledgerChecks:[],balanceChecks:[],priorGifts:[],vapUnits:[],audit:[]};
 }
 // Daten aus Depotklar 4.0 kennen noch keine Währungskonten; bis 4.1.1 galt ein
 // Jahresabschluss für alle Personen gemeinsam und wird je Person übernommen.
@@ -113,6 +115,7 @@ export function upgrade(s){
  if(s.accounts==null)s.accounts=[];
  if(s.vapUnits==null)s.vapUnits=[];
  if(s.balanceChecks==null)s.balanceChecks=[];
+ if(s.personGroups==null)s.personGroups=[];
  if(s.closedThrough!=null){s.closing=Object.fromEntries((s.persons||[]).map(p=>[p.id,s.closedThrough]));delete s.closedThrough;}
  return s;
 }
@@ -138,6 +141,16 @@ export function validate(s){
  const persons=unique(s.persons,'Person'),depots=unique(s.depots,'Depot'),securities=unique(s.securities,'Wertpapier');
  unique(s.events,'Vorgang');unique(s.certificates,'Bankbescheinigung');unique(s.ledgerChecks,'Buchhaltungsabgleich');unique(s.priorGifts,'Vorerwerb');
  for(const p of s.persons)if(!p.name?.trim())fail('Person ohne Namen.');
+ // Gruppen ordnen viele Personen, etwa nach Haushalt oder Familienzweig. Sie sind freiwillig, jede Person gehört zu
+ // höchstens einer; auf Bestände, Geld und Steuerwerte haben sie keinen Einfluss.
+ const groupList=s.personGroups??[];if(!Array.isArray(groupList))fail('Datenbereich personGroups ungültig.');
+ const groups=unique(groupList,'Gruppe'),groupNames=new Set();
+ for(const g of groupList){
+  const name=typeof g.name==='string'?g.name.trim():'';if(!name||name.length>40)fail('Gruppe: Name mit höchstens 40 Zeichen angeben.');
+  const key=name.toLocaleLowerCase('de');if(groupNames.has(key))fail(`Gruppe ${name}: Den Namen gibt es schon.`);groupNames.add(key);
+  if(!PERSON_COLORS.includes(g.color))fail(`Gruppe ${name}: unbekannte Farbe.`);
+ }
+ for(const p of s.persons)if(p.groupId!=null&&!groups.has(p.groupId))fail(`${p.name}: Die Gruppe gibt es nicht.`);
  for(const d of s.depots){if(!persons.has(d.personId))fail(`Depot ${d.name||d.id}: Person fehlt.`);if(!d.name?.trim())fail('Depot ohne Bezeichnung.');if(d.abroad!=null&&typeof d.abroad!=='boolean')fail(`Depot ${d.name}: Angabe zur ausländischen Bank ungültig.`);}
  unique(s.accounts,'Währungskonto');
  for(const a of s.accounts){
@@ -450,7 +463,7 @@ export function withoutEvents(s,ids,{reason='',importId=null}={}){
  validate(next);return next;
 }
 export function withRecord(s,collection,record,{reason=''}={}){
- const next=structuredClone(s);if(collection==='balanceChecks')next.balanceChecks??=[];
+ const next=structuredClone(s);if(collection==='balanceChecks')next.balanceChecks??=[];if(collection==='personGroups')next.personGroups??=[];
  const list=next[collection];if(!Array.isArray(list))fail('Unbekannter Datenbereich.');
  const r={...structuredClone(record),id:record.id||uid()},before=list.find(x=>x.id===r.id)||null;
  assertRecordOpen(s,collection,before,r);
@@ -472,6 +485,7 @@ export function withRecord(s,collection,record,{reason=''}={}){
 }
 export function withoutRecord(s,collection,id){
  const next=structuredClone(s);
+ if(collection==='personGroups'){next.personGroups??=[];if(next.persons.some(p=>p.groupId===id))fail('Gruppe hat noch Personen. Zuerst bei diesen Personen eine andere oder keine Gruppe wählen.');}
  if(collection==='persons'&&(next.depots.some(d=>d.personId===id)))fail('Person hat noch Depots.');
  if(collection==='persons'&&next.accounts.some(a=>!a.depotId&&a.personId===id))fail('Person hat noch Währungskonten.');
  if(collection==='persons'){

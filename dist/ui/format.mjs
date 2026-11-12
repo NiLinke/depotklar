@@ -16,6 +16,10 @@ export const statusLabel={supported:'Ermittelt',incomplete:'Angaben fehlen',unsu
 export const statusBadge=status=>`<span class="badge ${esc(status)}">${esc(statusLabel[status]||status)}</span>`;
 export const field=(name,label,value='',attrs='',hint='')=>`<label class="field"><span>${esc(label)}</span><input name="${esc(name)}" value="${esc(value??'')}" ${attrs}>${hint?`<small>${hint}</small>`:''}</label>`;
 export const select=(name,label,options,value,attrs='')=>`<label class="field"><span>${esc(label)}</span><select name="${esc(name)}" ${attrs}>${options.map(([v,l])=>`<option value="${esc(v)}" ${String(v)===String(value??'')?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
+// Suchfeld über einer Liste (Personenwahl, Tresorwahl): Jeder Eintrag trägt seinen Suchtext klein geschrieben in
+// data-find; die Anwendung blendet beim Tippen aus, was nicht passt.
+export const findText=(...parts)=>parts.filter(Boolean).join(' ').toLocaleLowerCase('de');
+export const searchField=label=>`<input type="search" class="list-search" data-search placeholder="${esc(label)}" aria-label="${esc(label)}" autocomplete="off" spellcheck="false">`;
 export const check=(name,label,checked)=>`<label class="check"><input type="checkbox" name="${esc(name)}" ${checked?'checked':''}><span>${esc(label)}</span></label>`;
 // Dezimaleingabe, deutsch zuerst: Komma ist Dezimaltrenner, Punkte sind dann
 // Tausenderpunkte. Ohne Komma gilt ein einzelner Punkt vor genau drei Ziffern als

@@ -12,6 +12,8 @@ Jede Änderung wird sofort gespeichert, in der Reihenfolge der Änderungen und j
 
 In einem Browser lassen sich mehrere Tresore führen, jeder mit eigenem Passwort. Nach dem Sperren stehen sie zur Auswahl. Der Name eines Tresors, der Name einer verbundenen Datei und der Stand der letzten Sicherung liegen unverschlüsselt im Browser; alle Finanzdaten bleiben verschlüsselt. „Aus diesem Browser entfernen“ löscht nur die Kopie im Browser.
 
+Für getrennte Familien empfiehlt sich je Familie ein eigener Tresor mit eigenem Passwort: Schenkungen und Zusammenveranlagung brauchen die Beteiligten im selben Tresor, alles andere bleibt getrennt. Ab sechs Tresoren hat die Auswahl ein Suchfeld; es sucht im Namen des Tresors und der verbundenen Datei, die Eingabetaste wählt den ersten Treffer. Sind mehrere Tresore im Browser, steht der Name des geöffneten unten in der Seitenleiste.
+
 ## Tresordatei
 
 In Chrome und Edge lässt sich ein Tresor mit einer Datei verbinden. Jede Änderung wird dann zusätzlich verschlüsselt in diese Datei geschrieben; der Browser fragt beim Öffnen des Tresors nach der Erlaubnis. Eine Tresordatei oder Sicherung lässt sich als eigener Tresor öffnen, auch auf einem anderen Gerät.

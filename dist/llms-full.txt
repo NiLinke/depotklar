@@ -2,9 +2,9 @@
 
 # Aktuelle Versionen und hinterlegte Regeln
 
-App 4.23.0 | Regelpaket DE-privat-2018-2026.15 | Datenformat 4
+App 4.24.0 | Regelpaket DE-privat-2018-2026.15 | Datenformat 4
 
-Dokumentationsstand 2026-11-11. Aus dem ausgelieferten Programm erzeugt; ein Build ist keine neue rechtliche Prüfung.
+Dokumentationsstand 2026-11-12. Aus dem ausgelieferten Programm erzeugt; ein Build ist keine neue rechtliche Prüfung.
 
 ## Basiszins der Vorabpauschale
 
@@ -73,11 +73,13 @@ Beim ersten Öffnen einen Namen und ein Passwort mit mindestens zwölf Zeichen w
 
 In Chrome und Edge lässt sich der Tresor unter „Tresor“ mit einer Datei verbinden, zum Beispiel auf OneDrive oder einem Netzlaufwerk: Jede Änderung wird dann auch dort verschlüsselt gespeichert, und auf einem anderen Gerät öffnet „Tresordatei öffnen“ denselben Tresor. Ist die Datei anderswo neuer geworden, speichert Depotklar nicht darüber, sondern bittet, den Tresor neu zu öffnen. Ohne verbundene Datei regelmäßig eine Sicherung herunterladen; vor dem Sperren erinnert Depotklar daran, wenn sich seit der letzten Sicherung etwas geändert hat. Ist eine Änderung nicht gespeichert, bleibt die Meldung stehen, bis der aktuelle Stand gespeichert ist – auch wenn die Datei gelöst oder neu verbunden wird; dann speichert Depotklar sofort nach. Sperrt Depotklar ohne Rückfrage, etwa nach zehn Minuten ohne Eingabe, bewahrt es einen nicht gespeicherten Stand verschlüsselt auf, solange der Browser offen ist, und bietet ihn beim nächsten Öffnen an: übernehmen, als eigene Datei sichern oder verwerfen.
 
-Mehrere Tresore – etwa für die Familie und zum Ausprobieren – stehen nach dem Sperren zur Auswahl; „Neuen Tresor anlegen“ legt einen weiteren an. Eine Tresordatei oder Sicherung wird als eigener Tresor geöffnet und ersetzt keinen vorhandenen; ist es derselbe Tresor, übernimmt Depotklar den neueren Stand.
+Mehrere Tresore – etwa für die Familie und zum Ausprobieren – stehen nach dem Sperren zur Auswahl; „Neuen Tresor anlegen“ legt einen weiteren an. Eine Tresordatei oder Sicherung wird als eigener Tresor geöffnet und ersetzt keinen vorhandenen; ist es derselbe Tresor, übernimmt Depotklar den neueren Stand. Ab sechs Tresoren hat die Auswahl ein Suchfeld; sind mehrere Tresore im Browser, steht der Name des geöffneten unten in der Seitenleiste.
 
 ## 2. Stammdaten
 
 Personen anlegen, dann je Person die Depots mit Bank und – falls vorhanden – dem Sachkonto der Buchhaltung (zum Beispiel 530). Wertpapiere lassen sich hier oder direkt beim Erfassen eines Vorgangs anlegen. Die Art bestimmt die Teilfreistellung: Aktienfonds 30 %, Mischfonds 15 %, Immobilienfonds 60 %, Auslands-Immobilienfonds 80 %, sonstige Fonds und Aktien 0 %. Den Satz nennt die Abrechnung der Bank. ETFs sind Fonds, keine Aktien. Für Anleihen, Zertifikate und ETCs gibt es eigene Arten (siehe „Anleihen, Zertifikate, ETCs“); Derivate rechnet Depotklar nicht. Passt ein Name nicht zur gewählten Art – etwa ein ETF als Aktie –, steht ein Hinweis in den Stammdaten, in der Vorschau und auf der Steuerseite. Die Art nur ändern, wenn sie falsch erfasst ist: Wechselt ein Fonds tatsächlich seine Art, gilt er als verkauft und neu angeschafft (§ 22 InvStG), was Depotklar nicht abbildet.
+
+Viele Personen lassen sich mit Gruppen ordnen, zum Beispiel nach Haushalt oder Familienzweig: unter „Personen“ den Block „Gruppen“ aufklappen, eine Gruppe mit Name und Farbe anlegen und bei jeder Person die Gruppe wählen. Die Personenwahl zeigt die Personen dann je Gruppe, der Kreis mit den Initialen trägt die Farbe der Gruppe. Ab acht Personen hat die Personenwahl ein Suchfeld: Es sucht in Name und Gruppe, die Eingabetaste wählt den ersten Treffer. Gruppen sind freiwillig und ändern nichts an Beständen, Geld und Steuerwerten; eine Summe je Gruppe gibt es nicht. Eine Gruppe lässt sich erst löschen, wenn keine Person mehr in ihr ist. Getrennte Familien gehören besser in getrennte Tresore.
 
 Liegt ein Depot bei einer ausländischen Bank, „Ausländische Bank – kein deutscher Steuerabzug“ anhaken. Dann behält niemand deutsche Steuer ein: Depotklar rechnet Kapitalertragsteuer, Solidaritätszuschlag und Kirchensteuer auf diese Erträge selbst und liefert die Werte für die Anlagen KAP und KAP-INV.
 
@@ -349,6 +351,8 @@ Jede Änderung wird sofort gespeichert, in der Reihenfolge der Änderungen und j
 
 In einem Browser lassen sich mehrere Tresore führen, jeder mit eigenem Passwort. Nach dem Sperren stehen sie zur Auswahl. Der Name eines Tresors, der Name einer verbundenen Datei und der Stand der letzten Sicherung liegen unverschlüsselt im Browser; alle Finanzdaten bleiben verschlüsselt. „Aus diesem Browser entfernen“ löscht nur die Kopie im Browser.
 
+Für getrennte Familien empfiehlt sich je Familie ein eigener Tresor mit eigenem Passwort: Schenkungen und Zusammenveranlagung brauchen die Beteiligten im selben Tresor, alles andere bleibt getrennt. Ab sechs Tresoren hat die Auswahl ein Suchfeld; es sucht im Namen des Tresors und der verbundenen Datei, die Eingabetaste wählt den ersten Treffer. Sind mehrere Tresore im Browser, steht der Name des geöffneten unten in der Seitenleiste.
+
 ## Tresordatei
 
 In Chrome und Edge lässt sich ein Tresor mit einer Datei verbinden. Jede Änderung wird dann zusätzlich verschlüsselt in diese Datei geschrieben; der Browser fragt beim Öffnen des Tresors nach der Erlaubnis. Eine Tresordatei oder Sicherung lässt sich als eigener Tresor öffnen, auch auf einem anderen Gerät.
@@ -433,6 +437,7 @@ Diese Dokumentation erklärt Depotklar 4 anhand des ausgelieferten Programms. Si
 - Kirchenaustritt oder -eintritt im Jahr: Monat in den Jahresdaten, Kirchensteuer gezwölftelt – Rechenlogik, „Jahresrechnung je Person“.
 - Mehrere Tresore, Tresordatei auf OneDrive oder Netzlaufwerk, Datei und Browser mit verschiedenen Ständen, aufbewahrter Stand – Kapitel „Tresor, Sicherung und Datenschutz“, Abschnitt „Tresordatei“.
 - Zahlen in deutscher oder englischer Schreibweise, Prüfung des Devisenkurses gegen den EZB-Referenzkurs, Hinweis bei auffälligem Datum – Erste Schritte, „Vorgänge im Jahr“.
+- Viele Personen: Gruppen mit Farbe und Suchfeld in der Personenwahl – Erste Schritte, „Stammdaten“. Viele Tresore: Suchfeld in der Tresorwahl – Kapitel „Tresor, Sicherung und Datenschutz“, „Mehrere Tresore“.
 
 ## Was Depotklar 4 nicht tut
 
@@ -453,6 +458,24 @@ Nenne die Vorgangsart, die benötigten Angaben, die Eingabe Feld für Feld, die 
 ----- KAPITEL: Änderungen | https://depotklar.niklaslinke.de/doku/aenderungen.md -----
 
 # Änderungen und Dokumentationsstand
+
+## 2026-11-12 - Depotklar 4.24.0: Gruppen für viele Personen, Suche in Personen- und Tresorwahl
+
+Anlass: Ein Tresor soll auch mit sehr vielen Personen übersichtlich bleiben, und ein Browser mit vielen Tresoren – etwa je Familie einer – ebenso.
+
+Verhalten:
+- Gruppen: Unter „Stammdaten“ → „Personen“ → „Gruppen“ lassen sich Gruppen mit Name und Farbe anlegen, zum Beispiel je Haushalt oder Familienzweig. Jede Person gehört zu höchstens einer Gruppe; die Zuordnung steht im Formular der Person. Acht Farben stehen zur Wahl, vorgeschlagen wird die erste noch freie.
+- Stammdaten: Mit Gruppen steht die Personenliste je Gruppe unter einer Zeile mit Farbpunkt, Anzahl und „ändern / löschen“, danach „Ohne Gruppe“. Ohne Gruppen bleibt die Liste, wie sie war; der Block „Gruppen“ ist zugeklappt.
+- Personenwahl: Mit Gruppen sind die Personen je Gruppe geordnet, der Kreis mit den Initialen trägt die Farbe der Gruppe. Ab acht Personen hat die Auswahl ein Suchfeld: Es sucht in Name und Gruppe, die Eingabetaste wählt den ersten Treffer, Escape schließt die Auswahl. Auf schmalen Fenstern klappt die Auswahl jetzt über die Seite auf; bisher schnitt die Kopfleiste sie ab.
+- Tresorwahl: Ab sechs Tresoren hat die Auswahl ein Suchfeld (Name des Tresors oder der verbundenen Datei) und eine begrenzte Höhe. Nach der Wahl eines Tresors steht die Eingabe im Passwortfeld. Sind mehrere Tresore im Browser, steht der Name des geöffneten unten in der Seitenleiste.
+- Protokoll: Anlegen, Ändern und Löschen einer Gruppe und die Zuordnung einer Person stehen im Protokoll, lassen sich von dort öffnen und zurücknehmen.
+- Löschen: Eine Gruppe lässt sich erst löschen, wenn keine Person mehr in ihr ist; die Meldung sagt es.
+
+Auswirkung auf Bestände, Geld und Steuerwerte: Keine. Gruppen ordnen nur die Anzeige; die Rechnung kennt sie nicht. Tresore aus früheren Versionen öffnen unverändert; der neue Datenbereich wird beim Öffnen ergänzt. Depotklar 4.23.0 liest einen Tresor mit Gruppen weiter und lässt Gruppen und Zuordnung unberührt.
+
+Grenzen: Eine Summe je Gruppe gibt es nicht – „Alle Personen“ meint weiter alle. Eine Person gehört zu einer Gruppe, nicht zu mehreren. Die Farben sind eine Hilfe fürs Auge; in Excel und PDF erscheinen Gruppen nicht. Getrennte Familien gehören besser in getrennte Tresore: Die Suche hilft bei der Wahl, zusammengeführt werden Tresore nicht.
+
+Tests: 7 neue feste Prüfungen: Regeln für Gruppen (Name, Farbe, Zuordnung, Löschen), Tresore ohne den neuen Datenbereich, gleiche Lose und gleicher Jahresbericht je Person mit und ohne Gruppen, Protokoll mit Öffnen und Zurücknehmen, Personenwahl mit und ohne Gruppen und Suchfeld, Maskierung von Namen aus dem Tresor, Stammdaten, Tresorwahl. Zusätzlich mit dem Stand 4.23.0 geprüft: Er liest einen Tresor mit Gruppen und behält sie beim Ändern einer Person. Im Browser mit der Maus geprüft: Gruppe anlegen und umfärben, Person zuordnen, Löschen einer Gruppe mit Personen (Meldung), Personenwahl mit Gruppen in schmaler und breiter Ansicht, Suche mit Treffer, ohne Treffer, Eingabetaste und Escape, Rücknahme und „Öffnen“ aus dem Protokoll; Tresorwahl mit sieben Testtresoren: Suche, Eingabetaste, Öffnen, Tresorname in der Seitenleiste; nach der Wahl eines Tresors per Maus steht die Eingabe im Passwortfeld; eine Gruppe im Tresor gespeichert und entschlüsselt wieder gelesen. Weitere Personen der Demo wurden per Skript über dieselben Formulare angelegt und zugeordnet.
 
 ## 2026-11-11 - Depotklar 4.23.0: Ergebnisse der Gesamtprüfung
 
@@ -1256,6 +1279,7 @@ Diese Module bilden die ausgelieferte Anwendung. Rechenkern unter core, Darstell
 - [ui/lots.mjs](/ui/lots.mjs)
 - [ui/master.mjs](/ui/master.mjs)
 - [ui/pdf.mjs](/ui/pdf.mjs)
+- [ui/people.mjs](/ui/people.mjs)
 - [ui/prices.mjs](/ui/prices.mjs)
 - [ui/report.mjs](/ui/report.mjs)
 - [ui/saver.mjs](/ui/saver.mjs)

@@ -40,6 +40,7 @@ Diese Dokumentation erklärt Depotklar 4 anhand des ausgelieferten Programms. Si
 - Kirchenaustritt oder -eintritt im Jahr: Monat in den Jahresdaten, Kirchensteuer gezwölftelt – Rechenlogik, „Jahresrechnung je Person“.
 - Mehrere Tresore, Tresordatei auf OneDrive oder Netzlaufwerk, Datei und Browser mit verschiedenen Ständen, aufbewahrter Stand – Kapitel „Tresor, Sicherung und Datenschutz“, Abschnitt „Tresordatei“.
 - Zahlen in deutscher oder englischer Schreibweise, Prüfung des Devisenkurses gegen den EZB-Referenzkurs, Hinweis bei auffälligem Datum – Erste Schritte, „Vorgänge im Jahr“.
+- Viele Personen: Gruppen mit Farbe und Suchfeld in der Personenwahl – Erste Schritte, „Stammdaten“. Viele Tresore: Suchfeld in der Tresorwahl – Kapitel „Tresor, Sicherung und Datenschutz“, „Mehrere Tresore“.
 
 ## Was Depotklar 4 nicht tut
 

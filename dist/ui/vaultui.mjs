@@ -1,9 +1,11 @@
-import {esc,field} from './format.mjs';
+import {esc,field,findText,searchField} from './format.mjs';
 import {APP_VERSION} from '../core/model.mjs';
 
 const fileInput=(label,cls)=>`<label class="${cls} file">${label}<input type="file" accept=".depotklar,.json,application/json" data-action="import-backup" hidden></label>`;
 const backupNote=v=>(v.pending?'eingelesene Datei wird beim Öffnen geprüft · ':'')+(v.linked?`Datei: ${esc(v.fileName||'verbunden')}`:v.backupRevision?`Sicherung Revision ${v.backupRevision}${v.backupRevision<v.revision?', seither geändert':''}`:'keine Sicherung vermerkt');
 
+// Ab so vielen Tresoren bekommt die Auswahl ein Suchfeld und eine begrenzte Höhe.
+export const VAULT_SEARCH_FROM=6;
 // Sperrbildschirm: Tresor wählen und öffnen, neuen Tresor anlegen oder eine Tresordatei öffnen.
 // Ohne sicheren Kontext (HTTPS oder localhost) stellt der Browser keine Verschlüsselung (Web Crypto) bereit: dann lässt
 // sich kein Tresor anlegen oder öffnen. Statt eines unverständlichen Fehlers ein klarer Hinweis; die Demo geht weiter.
@@ -14,7 +16,8 @@ export function lockHTML({vaults=[],selected=null,mode='open',error='',busy=fals
  const err=error?`<p class="error">${esc(error)}</p>`:'';
  const current=vaults.find(v=>v.id===selected)||vaults[0]||null,creating=mode==='create'||!current;
  const create=`<form data-form="create">${field('name','Name des Tresors',current?'':'Familie','required maxlength="60"','Zum Beispiel „Familie“. Der Name steht unverschlüsselt in diesem Browser.')}${field('password','Neues Tresorpasswort','','type="password" autocomplete="new-password" minlength="12" required','Mindestens 12 Zeichen. Ohne Passwort gibt es keinen Zugang – auch nicht für den Betreiber.')}${field('repeat','Passwort wiederholen','','type="password" autocomplete="new-password" minlength="12" required')}${err}<button class="button primary wide" ${busy?'disabled':''}>${busy?'Lege an …':'Tresor anlegen'}</button>${current?'<button type="button" class="link" data-action="cancel-create">Abbrechen</button>':''}</form>`;
- const open=current?`${vaults.length>1?`<div class="vault-list" role="radiogroup" aria-label="Tresor">${vaults.map(v=>`<button type="button" role="radio" aria-checked="${v.id===current.id}" class="vault-item${v.id===current.id?' on':''}" data-action="choose-vault" data-vault="${esc(v.id)}"><strong>${esc(v.name)}</strong><small>${backupNote(v)}</small></button>`).join('')}</div>`:''}
+ const many=vaults.length>=VAULT_SEARCH_FROM;
+ const open=current?`${vaults.length>1?`<div class="vault-pick" data-searchable>${many?searchField('Tresor suchen'):''}<div class="vault-list${many?' long':''}" role="radiogroup" aria-label="Tresor">${vaults.map(v=>`<button type="button" role="radio" aria-checked="${v.id===current.id}" class="vault-item${v.id===current.id?' on':''}" data-action="choose-vault" data-vault="${esc(v.id)}" data-find="${esc(findText(v.name,v.fileName))}"><strong>${esc(v.name)}</strong><small>${backupNote(v)}</small></button>`).join('')}</div>${many?'<p class="menu-none" data-find-none hidden>Kein Tresor mit diesem Namen.</p>':''}</div>`:''}
   <form data-form="unlock" data-vault="${esc(current.id)}">${field('password',vaults.length>1?`Passwort für „${current.name}“`:'Tresorpasswort','','type="password" autocomplete="current-password" required autofocus')}${err}<button class="button primary wide" ${busy?'disabled':''}>${busy?'Öffne …':'Tresor öffnen'}</button></form>
   <p class="muted small">${vaults.length>1?'':`${esc(current.name)} · ${backupNote(current)} · `}<button class="link" data-action="delete-vault" data-vault="${esc(current.id)}">Aus diesem Browser entfernen</button></p>`:'';
  const links=[current&&!creating?'<button class="link" data-action="new-vault">Neuen Tresor anlegen</button>':'',fileAccess?'<button class="link" data-action="open-file">Tresordatei öffnen</button>':fileInput('Tresordatei einlesen','link'),'<button class="link" data-action="demo">Demo mit Beispieldaten ansehen</button>'].filter(Boolean).join('');

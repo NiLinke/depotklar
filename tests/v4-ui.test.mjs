@@ -115,7 +115,7 @@ test('the running app is wired to the new renderers and nothing from version 3',
  assert.match(app,/taxPageHTML\(state,\{personId,year:shownTaxYear\(\),years:taxYears\(\)\}\)/);
  const tax=taxPageHTML(demoState(),{personId:'p1',year:2026,years:[2026,2025]});assert.match(tax,/<select id="year"><option value="2026" selected>2026<\/option><option value="2025" >2025<\/option>/);
  // Meist eine Person: zuletzt gewählte, sonst die erste; „Alle“ bleibt wählbar.
- assert.match(app,/personId=null/);assert.match(app,/function preferredPerson\(\)/);assert.match(app,/data-action="person"/);assert.match(app,/\['konten','Konten'\]/);
+ assert.match(app,/personId=null/);assert.match(app,/function preferredPerson\(\)/);assert.match(app,/personMenuHTML\(state,\{current,/);assert.match(app,/\['konten','Konten'\]/);
  const one=sheetHTML(demoState(),{year:2026,personId:'p1'});
  assert.match(one,/Alexander Weber · Jahresübersicht 2026/);assert.match(one,/class="kpi eco"[^]*378\.924,95 €/);assert.match(one,/class="kpi status supported" data-route="steuer"[^]*2\.993,78 €/);
  assert.doesNotMatch(sheetHTML(demoState(),{year:2026}),/kpi status/,'ohne Person kein Steuerjahr');
